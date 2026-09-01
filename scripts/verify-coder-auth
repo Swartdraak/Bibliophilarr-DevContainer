@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# verify-coder-auth — repository-first Coder preflight and authentication check.
+#
+# Prevents the failure mode where a stale hidden Coder CLI state
+# (~/.config/coder.json) is treated as authoritative over the repository-owned
+# .env configuration. This script:
+#   1. discovers required credentials from the repo-local .env (NOT global state)
+#   2. validates the Coder URL
+#   3. checks authentication with a least-privilege call (coder whoami)
+#   4. distinguishes auth-source-failed / authorization-failed /
+#      connectivity-failed / configuration-error
+#
+# It NEVER prints token or credential values — only names, set/empty status,
+# value lengths, the non-secret URL host, and boolean/success results.
+#
+# Usage: verify-coder-auth [path-to-env-file]   (default: <repo>/.env)
+set -uo pipefail
+
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+env_file=${1:-"$root/.env"}
+
+say()  { printf '%s\n' "$*"; }
+ok()   { printf '  [PASS] %s\n' "$*"; }
+warn() { printf '  [WARN] %s\n' "$*"; }
+fail() { printf '  [FAIL] %s\n' "$*"; }
+
+overall=PASS
+declare -a failures=()
+
+note_result() { # note_result <label> <status>
+  case "$2" in
+    PASS) ok "$1" ;;
+    WARN) warn "$1" ;;
+    *) fail "$1"; overall=FAIL; failures+=("$1") ;;
+  esac
+}
+
+say "==== Coder preflight (repository-first) ===="
+say "env file: $env_file"
+
+# --- 1. repo-local .env existence ---------------------------------------
+if [[ ! -f $env_file ]]; then
+  note_result "repo-local .env present" "FAIL (CONFIGURATION_ERROR)"
+  say "  The repository expects a local .env with CODER_URL and CODER_TOKEN."
+  say "  Create it from .env.example plus the operator-supplied credentials."
+  say "RESULT: $overall"
+  exit 4
+fi
+ok "repo-local .env present"
+
+# --- helpers: read a var name safely (value never printed) ---------------
+env_has() { grep -qE "^[[:space:]]*$1[[:space:]]*=" "$env_file"; }
+env_len() { # env_len <name> -> value length (or -1 if unset)
+  local line
+  line=$(grep -E "^[[:space:]]*$1[[:space:]]*=" "$env_file" | head -1) || true
+  [[ -n $line ]] || { printf -- '-1'; return; }
+  printf '%s' "${line#*=}" | sed -e 's/^ *//' -e 's/ *$//' -e 's/^"//' -e 's/"$//' | tr -d '\n' | wc -c
+}
+env_get_name_only() { # echo value for the CALLER to use as an env var (never printf)
+  grep -E "^[[:space:]]*$1[[:space:]]*=" "$env_file" | head -1 | sed -e 's/^[^=]*=//' -e 's/^ *//' -e 's/ *$//' -e 's/^"//' -e 's/"$//' | tr -d '\n'
+}
+
+# --- 2. required variables present (names + set/empty only) --------------
+say ""
+say "---- Credential variables (names + status only; values never printed) ----"
+url_set=0; tok_set=0
+for v in CODER_URL CODER_TOKEN; do
+  if env_has "$v"; then
+    len=$(env_len "$v")
+    if [[ $len -gt 0 ]]; then
+      ok "$v: SET (length ${len})"
+      [[ $v == CODER_URL ]] && url_set=1
+      [[ $v == CODER_TOKEN ]] && tok_set=1
+    else
+      fail "$v: present but EMPTY (CONFIGURATION_ERROR)"
+    fi
+  else
+    fail "$v: MISSING in .env (CONFIGURATION_ERROR)"
+  fi
+done
+
+if [[ $url_set -eq 0 || $tok_set -eq 0 ]]; then
+  say "RESULT: $overall"
+  say "Fix the .env above, then re-run."
+  exit 4
+fi
+
+# Load the values into this process's environment (never echo them).
+# The Coder CLI reads $CODER_SESSION_TOKEN (its --token flag env name), while the
+# repository .env supplies CODER_TOKEN. Map it without printing it.
+CODER_URL=$(env_get_name_only CODER_URL); export CODER_URL
+CODER_SESSION_TOKEN=$(env_get_name_only CODER_TOKEN); export CODER_SESSION_TOKEN
+export CODER_TOKEN="$CODER_SESSION_TOKEN"  # also expose the repo's own name
+
+# --- 3. validate the Coder URL (non-secret host only) ---------------------
+say ""
+url_host=$(printf '%s' "$CODER_URL" | sed -nE 's#^(https?://)([^/:]+)(:([0-9]+))?(/.*)?$#\2#p')
+url_scheme=$(printf '%s' "$CODER_URL" | sed -nE 's#^(https?://).*#\1#p')
+if [[ -n $url_scheme && -n $url_host ]]; then
+  ok "URL valid: scheme=${url_scheme%/} host=${url_host}"
+else
+  fail "URL format not recognized (CONFIGURATION_ERROR)"
+fi
+
+# --- 4. CLI available ------------------------------------------------------
+say ""
+if command -v coder >/dev/null 2>&1; then
+  ok "coder CLI: $(coder version 2>/dev/null | head -1)"
+else
+  fail "coder CLI not on PATH (CONFIGURATION_ERROR)"
+fi
+
+# --- 5. authentication (least-privilege: whoami) --------------------------
+say ""
+say "---- Authentication check: 'coder whoami' using repo .env credentials ----"
+whoami_out=$(coder whoami -o json 2>&1); rc=$?
+if (( rc == 0 )); then
+  user=$(printf '%s' "$whoami_out" | python3 -c 'import sys,json
+try:
+  d=json.load(sys.stdin); print(d[0].get("username",""))
+except Exception: print("")' 2>/dev/null)
+  roles=$(printf '%s' "$whoami_out" | python3 -c 'import sys,json
+try:
+  d=json.load(sys.stdin); r=d[0].get("roles",{}); print(",".join(r.get("*",[])))
+except Exception: print("")' 2>/dev/null)
+  ok "authenticated as '$user' (roles: ${roles:-?}) over ${url_host}"
+  # Authorization sanity: need at least a provisioner to create workspaces.
+  if [[ -n $roles && ( $roles == *Owner* || $roles == *admin* || $roles == *Provisioner* || $roles == *provisioner* ) ]]; then
+    ok "authorization: sufficient role to manage templates/workspaces"
+  elif [[ -n $roles ]]; then
+    warn "authorization: role '$roles' may not permit all operations"
+  fi
+else
+  body=${whoami_out:$(( ${#whoami_out} > 300 ? ${#whoami_out} - 300 : 0 ))}
+  # Classify the failure precisely.
+  if printf '%s' "$whoami_out" | grep -qiE '401|unauthorized|invalid token|403.*api token'; then
+    note_result "authentication (repo .env credentials)" "AUTHORIZATION_FAILED"
+  elif printf '%s' "$whoami_out" | grep -qiE 'connection refused|no such host|could not resolve|EOF|timed out|timeout|i/o timeout|proxy'; then
+    note_result "connectivity to ${url_host}" "CONNECTIVITY_FAILED"
+  else
+    note_result "authentication" "FAIL (rc=$rc)"
+  fi
+  warn "detail: ${body}"
+fi
+
+# --- 6. optional: list templates to confirm full read + scope -------------
+if (( rc == 0 )); then
+  say ""
+  say "---- Scope check: readable templates (first 10 names) ----"
+  if tls_out=$(coder templates list 2>&1); then
+    n=$(printf '%s\n' "$tls_out" | grep -cE '^\S' || true)
+    ok "templates readable (list returned ${n} lines)"
+  else
+    warn "templates list failed: ${tls_out}"
+  fi
+fi
+
+say ""
+if [[ $overall == PASS ]]; then
+  say "RESULT: PASS — repository .env provides working Coder auth at ${url_host}"
+  exit 0
+fi
+say "RESULT: FAIL — $(printf '%s; ' "${failures[@]:-see above}")"
+say "NOTE: Do NOT fall back to ~/.config/coder.json as authoritative. The repository"
+say "      .env is the intended credential source; see docs/CODER.md."
+exit 5
