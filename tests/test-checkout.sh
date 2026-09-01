@@ -10,4 +10,5 @@ sha=$(git -C "$tmp/work" rev-parse HEAD); "$root/scripts/checkout-ref.sh" "$tmp/
 [[ $(git -C "$tmp/work" rev-parse HEAD) == "$sha" ]]; [[ -z $(git -C "$tmp/work" symbolic-ref -q HEAD) ]]
 if "$root/scripts/checkout-ref.sh" "$tmp/work" nonexistent validator 2>/dev/null; then echo "expected checkout-ref to fail on nonexistent ref" >&2; exit 1; fi
 echo dirty >>"$tmp/work/file"; "$root/scripts/checkout-ref.sh" "$tmp/work" develop development
-rg -q dirty "$tmp/work/file"; echo 'checkout tests: PASS'
+# grep (not rg) so the test runs on minimal runners without ripgrep preinstalled.
+grep -q dirty "$tmp/work/file"; echo 'checkout tests: PASS'
