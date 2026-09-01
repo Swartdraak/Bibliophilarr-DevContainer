@@ -9,7 +9,12 @@ jq -e --arg m "$model" '.data[] | select(.id==$m)' <<<"$models" >/dev/null || { 
 payload=$(jq -nc --arg m "$model" '{model:$m,messages:[{role:"user",content:"Reply OK"}],max_tokens:8,stream:false}')
 curl "${curl_args[@]}" -d "$payload" "$base/chat/completions" | jq -e '.choices[0].message.content' >/dev/null
 stream=$(jq -nc --arg m "$model" '{model:$m,messages:[{role:"user",content:"Reply OK"}],max_tokens:8,stream:true}')
-curl "${curl_args[@]}" -N -d "$stream" "$base/chat/completions" | rg -q '^data:'
+# Capture streaming to a file, then grep for SSE 'data:' lines. Piping curl
+# straight into `rg -q` makes rg close the pipe after the first match, which
+# SIGPIPEs curl (exit 23) and false-fails the test even though streaming works.
+stream_file=$(mktemp); trap 'rm -f "$stream_file"' RETURN
+curl "${curl_args[@]}" -N -d "$stream" "$base/chat/completions" >"$stream_file"
+grep -q '^data:' "$stream_file"
 tool=$(jq -nc --arg m "$model" '{model:$m,messages:[{role:"user",content:"What is the weather in Oslo? Use the tool."}],tools:[{type:"function",function:{name:"weather",description:"Get weather",parameters:{type:"object",properties:{city:{type:"string"}},required:["city"]}}}],tool_choice:"required",max_tokens:64}')
 curl "${curl_args[@]}" -d "$tool" "$base/chat/completions" | jq -e '.choices[0].message.tool_calls[0].function.name=="weather"' >/dev/null
 echo "vLLM completion, streaming, and tool calling: PASS (model=$model)"
