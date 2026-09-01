@@ -21,7 +21,9 @@ RUN install -d -m 0755 /etc/apt/keyrings \
  && apt-get update && apt-get install -y --no-install-recommends nodejs \
  && corepack enable && rm -rf /var/lib/apt/lists/*
 RUN curl -fsSL https://get.docker.com | sh
-RUN useradd --create-home --shell /bin/bash --uid 1000 coder \
+RUN existing=$(getent passwd 1000 | cut -d: -f1); \
+    if [ -n "$existing" ]; then userdel --remove "$existing"; fi; \
+    useradd --create-home --shell /bin/bash --uid 1000 coder \
  && echo 'coder ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/coder \
  && chmod 0440 /etc/sudoers.d/coder \
  && install -d -o coder -g coder /workspaces /home/coder/.cache/nuget /home/coder/.cache/yarn
