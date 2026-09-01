@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export VLLM_BASE_URL=${LOCAL_LLM_BASE_URL:?LOCAL_LLM_BASE_URL required}
+export VLLM_MODEL=${LOCAL_LLM_MODEL:?LOCAL_LLM_MODEL required}
+if [[ -n ${LOCAL_LLM_API_KEY+x} ]]; then export VLLM_API_KEY=$LOCAL_LLM_API_KEY; fi
+exec "$(dirname "$0")/verify-vllm.sh" "$@"

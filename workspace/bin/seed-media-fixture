@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/media-common"
+kind=${1:?usage: seed-media-fixture audiobook|ebook SOURCE_RELATIVE_PATH}
+relative=${2:?source-relative path required}
+[[ $relative != /* && $relative != *'..'* ]] || { echo "unsafe relative path" >&2; exit 64; }
+source_root=$(media_source_for "$kind"); destination=$(media_destination_for "$kind")
+source_file=$(realpath -e "$source_root/$relative")
+case "$source_file" in "$source_root"/*) ;; *) echo "source escapes read-only library" >&2; exit 65;; esac
+[[ -f $source_file ]] || { echo "fixture must be a regular file" >&2; exit 66; }
+initialize_test_media
+install -m 0600 "$source_file" "$destination/fixture-${kind}"
+echo "seeded one $kind fixture into scratch storage"

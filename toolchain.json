@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "workspaceImage": "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.0",
+  "baseImage": "ubuntu:24.04@sha256:353675e2a41babd526e2b837d7ec780c2a05bca0164f7ea5dbbd433d21d166fc",
+  "dotnetChannel": "8.0",
+  "nodeMajor": "20",
+  "yarn": "repository-package-manager",
+  "terraform": "1.9.8",
+  "coderProvider": "2.6.1",
+  "dockerProvider": "3.0.2"
+}

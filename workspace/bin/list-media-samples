@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/media-common"
+kind=${1:?usage: list-media-samples audiobook|ebook [limit]}; limit=${2:-10}
+[[ $limit =~ ^[1-9][0-9]*$ && $limit -le 100 ]] || { echo "limit must be 1..100" >&2; exit 64; }
+root=$(media_source_for "$kind"); [[ -d $root ]] || { echo "$kind source unavailable" >&2; exit 2; }
+# Privacy-preserving opaque selection IDs. Use --paths only in a private interactive terminal.
+if [[ ${3:-} == --paths ]]; then find "$root" -xdev -type f -printf '%P\n' | head -n "$limit"; else
+  find "$root" -xdev -type f -print0 | head -z -n "$limit" | while IFS= read -r -d '' item; do
+    printf '%s  %s bytes\n' "$(printf '%s' "${item#"$root"/}" | sha256sum | cut -c1-12)" "$(stat -c %s "$item")"
+  done
+fi
