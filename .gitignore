@@ -1,1 +1,23 @@
+# Local environment / secrets
 .env
+.env.*
+!.env.example
+
+# Terraform working files (keep the lock file)
+.terraform/
+template/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+
+# Media scratch and test fixtures (never the real /media libraries)
+/workspace-test-media/
+scratch/
+fixtures/
+.tmp/
+*.tmp
+
+# IDE / OS noise
+.vscode/
+.idea/
+.DS_Store
