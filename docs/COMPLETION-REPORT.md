@@ -10,7 +10,7 @@ repository was modified.
 
 Target: `https://coder.onyxfang.info`; desired template: `bibliophilarr-agent-workspace`. Live inspection,
 publish, provisioning, repeatability, recreation, and rollback are **BLOCKED** by HTTP 403 from the execution
-environment proxy. The canonical image is `ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.0` with an
+environment proxy. The canonical image is `ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.1` with an
 Ubuntu digest and provisional .NET 8/Node 20 contract. Build/digest are **BLOCKED** because Docker and registry
 network access are unavailable. The tag must not be published until repository versions are reconciled.
 

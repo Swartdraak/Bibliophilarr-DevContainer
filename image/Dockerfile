@@ -20,17 +20,53 @@ RUN install -d -m 0755 /etc/apt/keyrings \
  && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" >/etc/apt/sources.list.d/nodesource.list \
  && apt-get update && apt-get install -y --no-install-recommends nodejs \
  && corepack enable && rm -rf /var/lib/apt/lists/*
-RUN useradd --create-home --shell /bin/bash --uid 1000 coder \
- && echo 'coder ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/coder \
- && chmod 0440 /etc/sudoers.d/coder \
- && install -d -o coder -g coder /workspaces /home/coder/.cache/nuget /home/coder/.cache/yarn
+# ubuntu:24.04 ships with an `ubuntu` user at UID/GID 1000. Coder workspaces
+# expect the `coder` user to be the primary UID 1000 user, so remove the
+# placeholder user BEFORE creating `coder`. Use `userdel` WITHOUT -r so group
+# GID 1000 is preserved (removing it would make `useradd --gid 1000` fail),
+# then drop the leftover home directory.
+RUN set -eux; \
+    # Remove the placeholder user that occupies UID/GID 1000 on ubuntu:24.04. \
+    # `userdel` may also remove the now-empty GID 1000 group, so we guarantee \
+    # the group exists again before creating `coder`.
+    if getent passwd 1000 >/dev/null 2>&1; then \
+      existing=$(getent passwd 1000 | cut -d: -f1); \
+      userdel "$existing" || true; \
+      rm -rf "/home/$existing" 2>/dev/null || true; \
+    fi; \
+    if getent group 1000 >/dev/null 2>&1; then \
+      groupdel "$(getent group 1000 | cut -d: -f1)" || true; \
+    fi; \
+    groupadd --gid 1000 coder; \
+    useradd --create-home --shell /bin/bash --uid 1000 --gid 1000 coder; \
+    echo 'coder ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/coder; \
+    chmod 0440 /etc/sudoers.d/coder; \
+    install -d -o coder -g coder /workspaces \
+      /home/coder/.cache/nuget /home/coder/.cache/yarn /home/coder/.cache/node \
+      /home/coder/.cache/copilot
 RUN curl -fsSL https://get.docker.com | sh \
  && usermod -aG docker coder
+# GitHub CLI (gh) from GitHub's official apt repository. Required by
+# verify-workspace.sh and used by the repository agent workflows.
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+      -o /usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+      > /etc/apt/sources.list.d/github-cli.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends gh \
+ && rm -rf /var/lib/apt/lists/*
+# GitHub Copilot CLI (agentic BYOK against the local vLLM endpoint, Phase 41).
+# Official package per https://github.com/features/copilot/cli : npm install -g @github/copilot.
+# Best-effort: a transient registry failure must not be allowed to fail the
+# whole image build; runtime tooling reports copilot as NOT-AVAILABLE if missing.
+RUN (npm install -g @github/copilot && echo 'copilot-cli installed') \
+  || echo 'WARNING: Copilot CLI install failed; continuing build'
 COPY scripts/ /opt/workspace/bin/
 COPY image/scripts/ /opt/workspace/bin/
 COPY workspace/bin/ /opt/workspace/bin/
 RUN chmod 0755 /opt/workspace/bin/* && ln -s /opt/workspace/bin/* /usr/local/bin/
-ENV WORKSPACE_IMAGE_VERSION=0.2.0
+ENV WORKSPACE_IMAGE_VERSION=0.2.1
 USER coder
 WORKDIR /workspaces
 ENTRYPOINT ["/bin/sh", "-c", "trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done"]

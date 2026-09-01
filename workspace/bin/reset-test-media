@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# shellcheck source=workspace/bin/media-common
 source "$(dirname "${BASH_SOURCE[0]}")/media-common"
 assert_safe_scratch_root
 [[ -d $TEST_MEDIA_ROOT ]] && find "$TEST_MEDIA_ROOT" -mindepth 1 -delete

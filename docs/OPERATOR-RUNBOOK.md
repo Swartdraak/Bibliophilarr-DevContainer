@@ -16,11 +16,11 @@ Confirm version/provider compatibility, registry and routed vLLM access, GitHub 
 ## Build, scan, and authorized test deployment
 
 ```bash
-docker build -f image/Dockerfile -t REGISTRY/bibliophilarr-agent-workspace:0.2.0 .
-docker run --rm REGISTRY/bibliophilarr-agent-workspace:0.2.0 image-self-test.sh
-syft REGISTRY/bibliophilarr-agent-workspace:0.2.0 -o spdx-json >sbom.spdx.json
-trivy image --exit-code 1 REGISTRY/bibliophilarr-agent-workspace:0.2.0
-docker push REGISTRY/bibliophilarr-agent-workspace:0.2.0
+docker build -f image/Dockerfile -t REGISTRY/bibliophilarr-agent-workspace:0.2.1 .
+docker run --rm REGISTRY/bibliophilarr-agent-workspace:0.2.1 image-self-test.sh
+syft REGISTRY/bibliophilarr-agent-workspace:0.2.1 -o spdx-json >sbom.spdx.json
+trivy image --exit-code 1 REGISTRY/bibliophilarr-agent-workspace:0.2.1
+docker push REGISTRY/bibliophilarr-agent-workspace:0.2.1
 coder templates push bibliophilarr-agent-workspace-test -d template
 ```
 

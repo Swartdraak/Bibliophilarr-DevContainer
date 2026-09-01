@@ -8,6 +8,6 @@ git -C "$tmp/source" branch -M develop; git -C "$tmp/source" remote add origin "
 git clone -q "$tmp/origin.git" "$tmp/work" --branch develop
 sha=$(git -C "$tmp/work" rev-parse HEAD); "$root/scripts/checkout-ref.sh" "$tmp/work" "$sha" validator
 [[ $(git -C "$tmp/work" rev-parse HEAD) == "$sha" ]]; [[ -z $(git -C "$tmp/work" symbolic-ref -q HEAD) ]]
-! "$root/scripts/checkout-ref.sh" "$tmp/work" nonexistent validator
+if "$root/scripts/checkout-ref.sh" "$tmp/work" nonexistent validator 2>/dev/null; then echo "expected checkout-ref to fail on nonexistent ref" >&2; exit 1; fi
 echo dirty >>"$tmp/work/file"; "$root/scripts/checkout-ref.sh" "$tmp/work" develop development
 rg -q dirty "$tmp/work/file"; echo 'checkout tests: PASS'
