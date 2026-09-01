@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+source "$(dirname "${BASH_SOURCE[0]}")/media-common"
+initialize_test_media
+status=0
+for label in audiobooks ebooks; do
+  path="/media/$label"
+  if [[ ! -d $path ]]; then printf '%-20s %s\n' "$label source" ABSENT; status=1; continue; fi
+  options=$(findmnt -T "$path" -no OPTIONS 2>/dev/null || true)
+  if [[ ,$options, == *,ro,* ]]; then state=READ-ONLY; else state=NOT-READ-ONLY; status=1; fi
+  count=$(find "$path" -xdev -type f -printf . 2>/dev/null | wc -c)
+  printf '%-20s %s (%s files; names redacted)\n' "$label source" "$state" "$count"
+done
+for path in "$TEST_MEDIA_ROOT"/{audiobooks,ebooks,downloads,library}; do
+  [[ -d $path && -w $path ]] || status=1
+done
+printf '%-20s %s\n' 'scratch media' "$([[ $status == 0 ]] && echo WRITABLE || echo CHECK-FAILED)"
+df -P "$TEST_MEDIA_ROOT" | awk 'NR==2 {printf "%-20s %s KiB\n", "scratch free", $4}'
+exit "$status"

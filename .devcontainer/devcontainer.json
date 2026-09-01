@@ -1,0 +1,16 @@
+{
+  "name": "Bibliophilarr Agentic Workspace",
+  "image": "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.0",
+  "remoteUser": "coder",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "mounts": [
+    "source=bibliophilarr-nuget,target=/home/coder/.nuget/packages,type=volume",
+    "source=bibliophilarr-yarn,target=/home/coder/.cache/yarn,type=volume"
+  ],
+  "containerEnv": {
+    "BIBLIOPHILARR_REPOSITORY_DIR": "${containerWorkspaceFolder}",
+    "TEST_MEDIA_ROOT": "${containerWorkspaceFolder}/.workspace-test-media"
+  },
+  "postCreateCommand": "initialize_test_media && verify-workspace ${containerWorkspaceFolder} && verify-agent-runtime ${containerWorkspaceFolder}",
+  "customizations": { "vscode": { "extensions": ["ms-dotnettools.csharp", "dbaeumer.vscode-eslint"] } }
+}

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Shared, non-secret media helper functions. This file is sourced by workspace commands.
+set -euo pipefail
+
+readonly MEDIA_AUDIOBOOKS_SOURCE="${MEDIA_AUDIOBOOKS_SOURCE:-/media/audiobooks}"
+readonly MEDIA_EBOOKS_SOURCE="${MEDIA_EBOOKS_SOURCE:-/media/ebooks}"
+readonly TEST_MEDIA_ROOT="${TEST_MEDIA_ROOT:-/workspace-test-media}"
+
+media_source_for() {
+  case "${1:?media kind required}" in
+    audiobook) printf '%s\n' "$MEDIA_AUDIOBOOKS_SOURCE" ;;
+    ebook) printf '%s\n' "$MEDIA_EBOOKS_SOURCE" ;;
+    *) echo "unsupported media kind" >&2; return 64 ;;
+  esac
+}
+
+media_destination_for() {
+  case "${1:?media kind required}" in
+    audiobook) printf '%s\n' "$TEST_MEDIA_ROOT/audiobooks" ;;
+    ebook) printf '%s\n' "$TEST_MEDIA_ROOT/ebooks" ;;
+    *) echo "unsupported media kind" >&2; return 64 ;;
+  esac
+}
+
+initialize_test_media() {
+  install -d -m 0700 "$TEST_MEDIA_ROOT"/{audiobooks,ebooks,downloads,library,evidence}
+}
+
+assert_safe_scratch_root() {
+  local resolved
+  resolved=$(realpath -m "$TEST_MEDIA_ROOT")
+  [[ $resolved == /workspace-test-media || $resolved == /workspaces/*/.workspace-test-media ]] || {
+    echo "refusing unsafe scratch root" >&2
+    return 65
+  }
+}

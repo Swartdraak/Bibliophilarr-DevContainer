@@ -1,0 +1,24 @@
+name: validate
+on: [push, pull_request]
+permissions: { contents: read }
+jobs:
+  static:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.9.8 }
+      - run: terraform -chdir=template fmt -check -recursive
+      - run: terraform -chdir=template init -backend=false
+      - run: terraform -chdir=template validate
+      - run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - run: find scripts image/scripts workspace/bin tests -type f -print0 | xargs -0 shellcheck
+      - run: ./tests/test-checkout.sh
+      - run: ./tests/test-media.sh
+      - run: python3 -m json.tool toolchain.json >/dev/null
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f image/Dockerfile -t workspace:test .
+      - run: docker run --rm workspace:test image-self-test.sh

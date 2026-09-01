@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo=${1:-${BIBLIOPHILARR_REPOSITORY_DIR:-/workspaces/Bibliophilarr}}
+[[ -d $repo/.github/agents ]] || { echo "agent definitions: MISSING" >&2; exit 2; }
+agents=$(find "$repo/.github/agents" -maxdepth 1 -type f -name '*.agent.md' | wc -l)
+skills=0; [[ ! -d $repo/.github/skills ]] || skills=$(find "$repo/.github/skills" -mindepth 1 -maxdepth 1 -type d | wc -l)
+instructions=$(find "$repo/.github" -type f \( -path '*/instructions/*' -o -name 'copilot-instructions.md' \) | wc -l)
+printf 'agent definitions: %s\nskills: %s\ninstruction files: %s\n' "$agents" "$skills" "$instructions"
+(( agents > 0 )) || exit 3
+for tool in git jq rg node python3; do command -v "$tool" >/dev/null || { echo "required runtime tool missing: $tool" >&2; exit 4; }; done
+if [[ ${LOCAL_LLM_PROVIDER:-none} == vllm ]]; then verify-local-llm --quick; else echo 'local LLM: NOT CONFIGURED'; fi
+echo 'agent runtime prerequisites: PASS; interactive delegation remains a separate acceptance test'
