@@ -2,7 +2,8 @@
 set -euo pipefail
 repo=${1:-${BIBLIOPHILARR_REPOSITORY_DIR:-/workspaces/Bibliophilarr}}
 version() { local name=$1; shift; printf '%-18s ' "$name"; "$@" 2>/dev/null | head -n1 || echo NOT-AVAILABLE; }
-version OS sh -c '. /etc/os-release; echo "$PRETTY_NAME"'
+os_pretty() { grep '^PRETTY_NAME=' /etc/os-release 2>/dev/null | cut -d= -f2- | tr -d '"' || uname -s; }
+version OS os_pretty
 version Architecture uname -m; version .NET dotnet --version; version Node node --version
 version Yarn yarn --version; version Git git --version; version GitHub gh --version
 version Copilot copilot --version; version Docker docker --version; version Compose docker compose version

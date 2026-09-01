@@ -9,8 +9,8 @@ deployment. The current handoff status is **READY FOR CODER TEST DEPLOYMENT**, n
 ```bash
 ./tests/test-checkout.sh
 ./scripts/validate-template.sh       # requires Terraform/provider network access
-docker build -f image/Dockerfile -t bibliophilarr-agent-workspace:0.2.0 .
-docker run --rm bibliophilarr-agent-workspace:0.2.0 image-self-test.sh
+docker build -f image/Dockerfile -t bibliophilarr-agent-workspace:0.2.1 .
+docker run --rm bibliophilarr-agent-workspace:0.2.1 image-self-test.sh
 ```
 
 Start with [the final design report](docs/FINAL-DESIGN-REPORT.md), then follow the

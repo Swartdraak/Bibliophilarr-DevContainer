@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# shellcheck source=workspace/bin/media-common
 source "$(dirname "${BASH_SOURCE[0]}")/media-common"
 kind=${1:?usage: seed-media-fixture audiobook|ebook SOURCE_RELATIVE_PATH}
 relative=${2:?source-relative path required}

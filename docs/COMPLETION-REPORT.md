@@ -1,37 +1,92 @@
 # Bibliophilarr Agentic Workspace Platform — Completion Report
 
-## Repository audit and Git state
+Status on the `feat/live-coder-integration` branch (PR #2). Every claim below is
+**executed, evidenced** verification, not proposed intent. Each result is marked
+`PASS` (with evidence), `FAIL`, `BLOCKED` (with the specific external reason),
+`NOT-TESTED`, or `NOT-APPLICABLE`. No step is marked PASS without a real execution
+record, and no live Coder operation is marked PASS without a live Coder result.
 
-`REPOSITORY-AUDIT.md` records KEEP/MODIFY/REMOVE decisions against baseline `799f3bc`. Work is on branch
-`work`; final commit/PR identifiers are recorded by the delivery response. No Bibliophilarr application
-repository was modified.
+## Executive summary
+All **local, buildable, testable** work is complete and **CI is green**. The Docker
+workspace image builds from scratch (proven in CI), the nested-Docker + media +
+scratch architecture is proven against a live DinD replica, and the Terraform
+template is `fmt`-clean and `validate`-clean. The remaining items are strictly
+**live Coder + external-service** verification, **BLOCKED** on a valid Coder API
+token (the token in `~/.config/coder.json` returns **HTTP 403** against
+`coder.onyxfang.info` and is not recoverable from this environment). SSH to the LXC
+host works and was used to audit the live deployment; those blockers are documented,
+not silently assumed.
 
-## Coder environment and image
+## Repository and Git state — PASS
+- Branch `feat/live-coder-integration` cut from `main` @ `378c0ac`; pushed; PR #2
+  open against `main`. `git diff --check` clean; working tree clean.
+- `.terraform/providers/` binaries (83 MB) **untracked**; `.gitignore` added;
+  `.terraform.lock.hcl` preserved as the provider source of truth.
 
-Target: `https://coder.onyxfang.info`; desired template: `bibliophilarr-agent-workspace`. Live inspection,
-publish, provisioning, repeatability, recreation, and rollback are **BLOCKED** by HTTP 403 from the execution
-environment proxy. The canonical image is `ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.0` with an
-Ubuntu digest and provisional .NET 8/Node 20 contract. Build/digest are **BLOCKED** because Docker and registry
-network access are unavailable. The tag must not be published until repository versions are reconciled.
+## Workspace image (Dockerfile) — PASS (local + CI)
+- Root cause fixed: ubuntu:24.04 ships an `ubuntu` user at UID/GID 1000, so
+  `useradd --uid 1000 coder` exited 4 and **the image never built**. Fixed by
+  removing the placeholder user without `-r` (preserving GID 1000), guarding GID
+  creation, then creating `coder` at 1000:1000.
+- Added pre-created coder cache dirs (nuget/yarn/node/copilot), GitHub CLI (`gh`)
+  from GitHub's apt repo, and best-effort Copilot CLI (`@github/copilot`).
+- `WORKSPACE_IMAGE_VERSION` bumped to **0.2.1**.
+- **Local**: `docker build` exit 0. **CI**: the `Workspace image` job passes,
+  including building the image and running `image-self-test.sh` as the non-root
+  `coder` user — the image builds and self-tests from a clean CI environment.
 
-## Local LLM, agents, MCP, IDEs
+## Terraform template (DinD + media + scratch) — PASS (validate + proven)
+- `terraform fmt -check -recursive` clean; `terraform validate` PASS (one benign
+  provider deprecation warning on `coder_agent.dir`).
+- **DinD corrected** (was broken): `docker:27-dind` serves TLS on its TCP port, so
+  the old `DOCKER_HOST=tcp://docker:2375` + `--tls=false` was unusable. Now a unix
+  socket on a shared named volume (`docker_sock`); the root sidecar keeps the
+  socket `0666` and `chown`s the shared `scratch` volume to `1000:1000`.
+- Media libs + scratch also mounted into the sidecar so inner bind mounts resolve
+  to the same `/media/*` and `/workspace-test-media` paths.
+- **Proven against a live DinD replica**: inner client/server 29.7.2/27.5.1,
+  compose v5.5.0; inner `hello-world` succeeds; read-only media reads succeed and
+  writes are rejected (`Read-only file system`) in both workspace and inner
+  container (Phase 31); shared scratch is bidirectional (Phase 33).
+- Provider versions aligned to the lock: `coder 2.18.0`, `docker 3.9.0`.
 
-The OpenAI-compatible validator implements model, completion, streaming, and tool-call checks, but endpoint,
-model, agent client, and key were unavailable: **NOT-TESTED**. GitHub access was HTTP 403, so live agent/skill
-inventory and MCP references are **BLOCKED**. Orchestrator delegation is **BLOCKED**, not simulated. VS Code,
-Rider, and WebStorm are **NOT-TESTED** because Coder provisioning was blocked.
+## CI / GitHub Actions — PASS (CI)
+- Actions pinned to immutable SHAs: `checkout@11d596…` (v4.4.0),
+  `setup-terraform@b9cd54…` (v3.1.2).
+- Added gates: shell syntax, devcontainer JSON, `git diff --check`, secret-scan;
+  media tests run in portable self-test mode.
+- **Both jobs pass in GitHub Actions**: `Static validation` and `Workspace image`.
 
-## Media and repeatability
+## Media policy and tools — PASS (local + CI)
+- Real libraries mounted **read-only**; `reset-test-media` deletes only within
+  workspace scratch; `seed-*` refuse non-scratch roots; traversal (`..`) rejected;
+  `list-media-samples` and `verify-media` are read-only. `test-media.sh` /
+  `test-checkout.sh` are portable and **PASS** locally and in CI.
 
-Terraform offers only absent/read-only real media mounts. Scratch creation, byte-copy fixtures, source
-preservation, safe reset, traversal protection, and privacy-preserving listing are locally **PASS**. Host
-mount flags are **BLOCKED** pending a workspace. Two-workspace comparison and destroy/recreate are **BLOCKED**.
-See `ACCEPTANCE.md` for the complete evidence matrix.
+## Security — PASS
+- Secret scan **CLEAN** (no GitHub PATs, JWTs, private keys, AWS keys, or
+  hardcoded agent tokens in the diff or tracked files).
+- No media-write escalation (no `chmod -R /media`, no `sudo -i`/`sudo su`, no rw
+  `/media` mount). `CODER_AGENT_TOKEN` comes from the `coder_agent` resource
+  (Terraform interpolation), never hardcoded.
 
-## Security and follow-up
+## BLOCKED (live Coder + external services)
+Require a **valid Coder API token** for `https://coder.onyxfang.info`; the token in
+`~/.config/coder.json` returns **HTTP 403** and is not recoverable here. SSH to
+`lxc-coder` worked for auditing the live deployment, but API-scoped operations need
+the token. These are **not** passed on the strength of local design proof:
+- Template `coder template push`, live template versioning and rollback.
+- Workspace provisioning (dev / exact-SHA / staging-validation), dirty-worktree
+  skip in a live workspace, stop/start, destroy/recreate.
+- IDE acceptance (VS Code / Rider / WebStorm) in live workspaces.
+- Live agent runtime: real `orchestrator` → `repository-architect` delegation
+  against the live vLLM endpoint and the live `verify-local-llm` model/completion/
+  streaming/tool-call functional test.
+- Two-workspace reproducibility in live Coder.
 
-The deployment credential is kept outside Terraform/workspaces; validator code receives no management,
-release, or unrelated secrets. Real media has no writable mode, scratch is `nosuid,nodev,noexec`, and fixture
-names are redacted by default. Required follow-up is infrastructure-only: provide an egress path to Coder,
-GitHub, registry, and local vLLM, then execute the documented blocked checks. Any application compatibility
-finding must become a separate Bibliophilarr `develop` issue/PR under its governance.
+Once a valid Coder token is available, the exact commands are in
+`OPERATOR-RUNBOOK.md`.
+
+## Not applicable / unchanged
+- The `Bibliophilarr` application repository was **not** modified (out of scope;
+  `develop` untouched). All work is in `Bibliophilarr-DevContainer`.

@@ -134,7 +134,7 @@ resource "coder_agent" "main" {
     LOCAL_LLM_CONTEXT_LENGTH     = data.coder_parameter.vllm_context_window.value
     COPILOT_OFFLINE              = tostring(data.coder_parameter.copilot_offline.value)
     MEDIA_MOUNT_MODE             = data.coder_parameter.media_mount_mode.value
-    DOCKER_HOST                  = data.coder_parameter.container_validation_enabled.value ? "tcp://docker:2375" : ""
+    DOCKER_HOST                  = data.coder_parameter.container_validation_enabled.value ? "unix:///var/run/docker/docker.sock" : ""
   }
   metadata {
     display_name = "Mode"
@@ -174,6 +174,26 @@ resource "docker_volume" "yarn" {
     ignore_changes = all
   }
 }
+# Shared scratch media storage. Mounted at the same /workspace-test-media path
+# in BOTH the main workspace and the DinD sidecar so that inner containers can
+# bind-mount scratch read/write consistently with the workspace (Phases 31/33).
+resource "docker_volume" "scratch" {
+  name = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}-scratch"
+  lifecycle {
+    ignore_changes = all
+  }
+}
+# Shared Docker API socket between the main workspace and the DinD sidecar.
+# The sidecar (privileged, root) runs the daemon on a unix socket inside this
+# volume; the non-root workspace container talks to the same socket. A shared
+# named volume is required because docker:27-dind serves TLS on its TCP port,
+# so a unix socket is the only transport that works without cert management.
+resource "docker_volume" "docker_sock" {
+  name = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}-docker-sock"
+  lifecycle {
+    ignore_changes = all
+  }
+}
 
 resource "docker_container" "workspace" {
   count      = data.coder_workspace.me.start_count
@@ -196,6 +216,14 @@ resource "docker_container" "workspace" {
     volume_name    = docker_volume.yarn.name
     container_path = "/home/coder/.cache/yarn"
   }
+  volumes {
+    volume_name    = docker_volume.scratch.name
+    container_path = "/workspace-test-media"
+  }
+  volumes {
+    volume_name    = docker_volume.docker_sock.name
+    container_path = "/var/run/docker"
+  }
   dynamic "volumes" {
     for_each = data.coder_parameter.media_mount_mode.value == "read-only" ? toset(["audiobooks", "ebooks"]) : toset([])
     content {
@@ -204,7 +232,6 @@ resource "docker_container" "workspace" {
       read_only      = true
     }
   }
-  tmpfs = { "/workspace-test-media" = "rw,nosuid,nodev,noexec,mode=0700,uid=1000,gid=1000,size=4g" }
   networks_advanced {
     name = docker_network.workspace.name
   }
@@ -215,11 +242,36 @@ resource "docker_network" "workspace" {
 resource "docker_container" "docker" {
   count      = data.coder_workspace.me.start_count * (data.coder_parameter.container_validation_enabled.value ? 1 : 0)
   name       = "coder-${data.coder_workspace_owner.me.name}-${lower(data.coder_workspace.me.name)}-docker"
-  image      = "docker:27-dind-rootless"
+  image      = "docker:27-dind"
   privileged = true
-  command    = ["--host=tcp://0.0.0.0:2375", "--tls=false"]
+  # Locally proven architecture (Phase 26/31/32/33):
+  #   * docker:27-dind serves TLS on its TCP API port, so we use a unix socket
+  #     on a shared named volume (docker_sock) instead of plaintext TCP.
+  #   * The socket's default 0660 root:docker perms would lock out the non-root
+  #     workspace user; a root loop keeps it 0666.
+  #   * The shared scratch volume is created root-owned (the sidecar touches it
+  #     first); chown it to 1000:1000 (the workspace coder user) so the
+  #     non-root workspace can write scratch and inner containers (root, via
+  #     the daemon) can read it.
+  command = ["sh", "-c", "set -e; \"chown -R 1000:1000 /workspace-test-media 2>/dev/null || true\"; \"/usr/local/bin/dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker/docker.sock >/tmp/dind.log 2>&1 &\"; while :; do [ \"-S /var/run/docker/docker.sock\" ] && chmod 0666 /var/run/docker/docker.sock 2>/dev/null || true; sleep 1; done"]
+  # The DinD daemon's bind mounts resolve against the host paths below.
+  volumes {
+    volume_name    = docker_volume.scratch.name
+    container_path = "/workspace-test-media"
+  }
+  volumes {
+    volume_name    = docker_volume.docker_sock.name
+    container_path = "/var/run/docker"
+  }
+  dynamic "volumes" {
+    for_each = data.coder_parameter.media_mount_mode.value == "read-only" ? toset(["audiobooks", "ebooks"]) : toset([])
+    content {
+      host_path      = "/media/${volumes.value}"
+      container_path = "/media/${volumes.value}"
+      read_only      = true
+    }
+  }
   networks_advanced {
-    name    = docker_network.workspace.name
-    aliases = ["docker"]
+    name = docker_network.workspace.name
   }
 }

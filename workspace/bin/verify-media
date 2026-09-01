@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# shellcheck source=workspace/bin/media-common
 source "$(dirname "${BASH_SOURCE[0]}")/media-common"
 initialize_test_media
 status=0

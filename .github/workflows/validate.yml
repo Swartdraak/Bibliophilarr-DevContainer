@@ -1,24 +1,94 @@
 name: validate
-on: [push, pull_request]
-permissions: { contents: read }
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static:
+    name: Static validation
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: 1.9.8 }
-      - run: terraform -chdir=template fmt -check -recursive
-      - run: terraform -chdir=template init -backend=false
-      - run: terraform -chdir=template validate
-      - run: sudo apt-get update && sudo apt-get install -y shellcheck
-      - run: find scripts image/scripts workspace/bin tests -type f -print0 | xargs -0 shellcheck
-      - run: ./tests/test-checkout.sh
-      - run: ./tests/test-media.sh
-      - run: python3 -m json.tool toolchain.json >/dev/null
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.9.8
+
+      - name: Terraform fmt
+        run: terraform -chdir=template fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform -chdir=template init -backend=false
+
+      - name: Terraform validate
+        run: terraform -chdir=template validate
+
+      - name: Install shellcheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+
+      - name: Shell syntax
+        run: |
+          for f in $(find scripts image/scripts workspace/bin tests -type f); do
+            bash -n "$f" || { echo "syntax error in $f"; exit 1; }
+          done
+
+      - name: ShellCheck
+        run: find scripts image/scripts workspace/bin tests -type f -print0 | xargs -0 shellcheck
+
+      - name: JSON validation
+        run: |
+          python3 -m json.tool toolchain.json >/dev/null
+          python3 -m json.tool .devcontainer/devcontainer.json >/dev/null
+
+      - name: Git whitespace / style
+        run: git diff --check HEAD
+
+      - name: Checkout tests
+        run: ./tests/test-checkout.sh
+
+      - name: Media safety tests
+        run: |
+          # Media safety tests run against a bounded TMPDIR scratch (self-test
+          # mode) so they are portable to runners where /workspaces is absent.
+          export MEDIA_SELF_TEST=1
+          ./tests/test-media.sh
+
+      - name: Secret scan
+        env:
+          SCAN_PATTERNS: "CODER_SESSION_TOKEN CODER_TOKEN ghp_ github_pat_ xox[baprs]- sk-[A-Za-z0-9]{20,}"
+        run: |
+          # Fail the build if a high-confidence secret literal is present in the
+          # tracked tree. Public-repo safety gate (Phase 75).
+          if grep -rnI -E "$SCAN_PATTERNS" --exclude-dir=.git --exclude-dir=.terraform . 2>/dev/null \
+             | grep -vE 'example|placeholder|<|redacted|\$\{|process\.env|os\.environ|: *""'; then
+            echo "::error::Potential secret literal detected in tracked files."
+            exit 1
+          fi
+          echo "secret scan: clean"
+
   image:
+    name: Workspace image
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - run: docker build -f image/Dockerfile -t workspace:test .
-      - run: docker run --rm workspace:test image-self-test.sh
+      - name: Check out
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Build canonical image
+        env:
+          TARGETPLATFORM: linux/amd64
+        run: docker build -f image/Dockerfile --build-arg TARGETARCH=amd64 -t workspace:test .
+
+      - name: Image self-test
+        run: docker run --rm --entrypoint /usr/local/bin/image-self-test.sh workspace:test

@@ -1,7 +1,7 @@
 variable "workspace_image" {
   description = "Immutable workspace image tag or digest."
   type        = string
-  default     = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.0"
+  default     = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.1"
   validation {
     condition     = var.workspace_image != "latest" && !endswith(var.workspace_image, ":latest")
     error_message = "Pin an immutable version or digest, never latest."
