@@ -20,13 +20,12 @@ RUN install -d -m 0755 /etc/apt/keyrings \
  && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_${NODE_MAJOR}.x nodistro main" >/etc/apt/sources.list.d/nodesource.list \
  && apt-get update && apt-get install -y --no-install-recommends nodejs \
  && corepack enable && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL https://get.docker.com | sh
-RUN existing=$(getent passwd 1000 | cut -d: -f1); \
-    if [ -n "$existing" ]; then userdel --remove "$existing"; fi; \
-    useradd --create-home --shell /bin/bash --uid 1000 coder \
+RUN useradd --create-home --shell /bin/bash --uid 1000 coder \
  && echo 'coder ALL=(ALL) NOPASSWD:ALL' >/etc/sudoers.d/coder \
  && chmod 0440 /etc/sudoers.d/coder \
  && install -d -o coder -g coder /workspaces /home/coder/.cache/nuget /home/coder/.cache/yarn
+RUN curl -fsSL https://get.docker.com | sh \
+ && usermod -aG docker coder
 COPY scripts/ /opt/workspace/bin/
 COPY image/scripts/ /opt/workspace/bin/
 COPY workspace/bin/ /opt/workspace/bin/
