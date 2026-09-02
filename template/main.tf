@@ -1,6 +1,21 @@
 data "coder_workspace" "me" {}
 data "coder_workspace_owner" "me" {}
 
+# One authoritative project path (used by code-server, JetBrains, startup,
+# git ops, and the agent dir). §4: no placeholder paths.
+locals {
+  project_dir = "/workspaces/Bibliophilarr"
+}
+
+# NOTE on GitHub auth (§4/§25): the operator pre-created the Coder Secret
+# "Swartdraak GH PAT" with --env GITHUB_TOKEN. Coder auto-injects that as the
+# $GITHUB_TOKEN env var into the workspace at start (no terraform data source
+# needed; there is no coder_secret data source in the coder provider). The
+# startup script consumes $GITHUB_TOKEN to configure `gh`/git-HTTPS. The value
+# is NEVER written to state, .env, logs, or committed.
+# Precondition: `coder secret ls` must show "Swartdraak GH PAT"/GITHUB_TOKEN
+# enabled, before workspace creation (runbook precondition §12/§32).
+
 data "coder_parameter" "bibliophilarr_ref" {
   name         = "bibliophilarr_ref"
   display_name = "Git ref"
@@ -59,6 +74,21 @@ data "coder_parameter" "inference_provider" {
     value = "vllm"
   }
 }
+# workspace_image is a first-class Coder workspace input (not merely a Terraform
+# default). This is the deterministic image-identity fix (§30): as a coder_parameter
+# its default is refreshed from the active template version on each push, so the
+# template, the requested image, the running container, WORKSPACE_IMAGE_VERSION and
+# toolchain.json all identify the SAME artifact. A plain Terraform variable was being
+# resolved to a stale memoized host value, so it is intentionally NOT used for the
+# container image. 0.2.6 is the final clean image built from image/Dockerfile.
+data "coder_parameter" "workspace_image" {
+  name         = "workspace_image"
+  display_name = "Workspace image"
+  default      = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.6"
+  mutable      = true
+  order        = 0
+}
+
 data "coder_parameter" "vllm_base_url" {
   name         = "vllm_base_url"
   display_name = "vLLM base URL"
@@ -117,7 +147,7 @@ data "coder_parameter" "media_mount_mode" {
 resource "coder_agent" "main" {
   arch                    = "amd64"
   os                      = "linux"
-  dir                     = "/workspaces/Bibliophilarr"
+  dir                     = local.project_dir
   startup_script_behavior = "blocking"
   startup_script          = <<-EOT
     set -eu
@@ -125,7 +155,7 @@ resource "coder_agent" "main" {
   EOT
   env = {
     BIBLIOPHILARR_REPOSITORY_URL = var.repository_url
-    BIBLIOPHILARR_REPOSITORY_DIR = "/workspaces/Bibliophilarr"
+    BIBLIOPHILARR_REPOSITORY_DIR = local.project_dir
     BIBLIOPHILARR_GIT_REF        = data.coder_parameter.bibliophilarr_ref.value
     BIBLIOPHILARR_WORKSPACE_MODE = data.coder_parameter.workspace_mode.value
     LOCAL_LLM_PROVIDER           = data.coder_parameter.inference_provider.value
@@ -135,6 +165,10 @@ resource "coder_agent" "main" {
     COPILOT_OFFLINE              = tostring(data.coder_parameter.copilot_offline.value)
     MEDIA_MOUNT_MODE             = data.coder_parameter.media_mount_mode.value
     DOCKER_HOST                  = data.coder_parameter.container_validation_enabled.value ? "unix:///var/run/docker/docker.sock" : ""
+    # NOTE: GITHUB_TOKEN is NOT set here. It is auto-injected by Coder from the
+    # operator's Coder Secret "Swartdraak GH PAT" (--env GITHUB_TOKEN) at
+    # workspace start. The startup script uses $GITHUB_TOKEN to configure `gh`
+    # / git-HTTPS. (No `coder_secret` terraform data source exists.)
   }
   metadata {
     display_name = "Mode"
@@ -145,7 +179,7 @@ resource "coder_agent" "main" {
   metadata {
     display_name = "Repository HEAD"
     key          = "head"
-    script       = "git -C /workspaces/Bibliophilarr rev-parse --short HEAD 2>/dev/null || echo pending"
+    script       = "git -C ${local.project_dir} rev-parse --short HEAD 2>/dev/null || echo pending"
     interval     = 60
   }
   metadata {
@@ -198,7 +232,7 @@ resource "docker_volume" "docker_sock" {
 resource "docker_container" "workspace" {
   count      = data.coder_workspace.me.start_count
   name       = "coder-${data.coder_workspace_owner.me.name}-${lower(data.coder_workspace.me.name)}"
-  image      = var.workspace_image
+  image      = data.coder_parameter.workspace_image.value
   hostname   = data.coder_workspace.me.name
   cpu_shares = var.cpu * 1024
   memory     = var.memory_gb * 1024 * 1024 * 1024
@@ -232,12 +266,16 @@ resource "docker_container" "workspace" {
       read_only      = true
     }
   }
+  # v0.7 fix (evidence-based, from the minimal agent smoke test): use the
+  # DEFAULT bridge network instead of a Coder-managed custom network. The
+  # custom network made the workspace container unable to reach the Coder
+  # server for the agent bootstrap (curl: (3) URL rejected: Bad hostname), so
+  # the agent stuck in "connecting". The default bridge is proven to reach the
+  # Coder server. The DinD socket and scratch are shared via NAMED VOLUMES,
+  # which are daemon-scoped and do NOT require a shared custom network.
   networks_advanced {
-    name = docker_network.workspace.name
+    name = "bridge"
   }
-}
-resource "docker_network" "workspace" {
-  name = "coder-${data.coder_workspace_owner.me.name}-${data.coder_workspace.me.name}"
 }
 resource "docker_container" "docker" {
   count      = data.coder_workspace.me.start_count * (data.coder_parameter.container_validation_enabled.value ? 1 : 0)
@@ -253,7 +291,15 @@ resource "docker_container" "docker" {
   #     first); chown it to 1000:1000 (the workspace coder user) so the
   #     non-root workspace can write scratch and inner containers (root, via
   #     the daemon) can read it.
-  command = ["sh", "-c", "set -e; \"chown -R 1000:1000 /workspace-test-media 2>/dev/null || true\"; \"/usr/local/bin/dockerd-entrypoint.sh dockerd --host=unix:///var/run/docker/docker.sock >/tmp/dind.log 2>&1 &\"; while :; do [ \"-S /var/run/docker/docker.sock\" ] && chmod 0666 /var/run/docker/docker.sock 2>/dev/null || true; sleep 1; done"]
+  #
+  # COMMAND NOTE (v0.6): the previous one-liner embedded nested double-quotes
+  # (chown / dockerd in \"...\" ) under `set -e`; busybox sh on docker:27-dind
+  # parsed each quoted segment as a single command name, so the container
+  # "exited immediately" before dockerd ever started. It also routed through
+  # dockerd-entrypoint.sh, whose `set -eu` TLS/SAN generation is unnecessary
+  # for a plain unix-socket bridge and can abort boot. Start dockerd directly on
+  # the socket (no nested quotes, no set -e) and keep a plain keep-alive loop.
+  command = ["sh", "-c", "chown -R 1000:1000 /workspace-test-media 2>/dev/null || true; dockerd --host=unix:///var/run/docker/docker.sock >/tmp/dind.log 2>&1 & while :; do if [ -S /var/run/docker/docker.sock ]; then chmod 0666 /var/run/docker/docker.sock 2>/dev/null || true; fi; sleep 1; done"]
   # The DinD daemon's bind mounts resolve against the host paths below.
   volumes {
     volume_name    = docker_volume.scratch.name
@@ -271,7 +317,61 @@ resource "docker_container" "docker" {
       read_only      = true
     }
   }
+  # Same default bridge as the workspace container (v0.7). They share the DinD
+  # socket and scratch through named volumes, not through a custom network.
   networks_advanced {
-    name = docker_network.workspace.name
+    name = "bridge"
+  }
+}
+
+# ---------------------------------------------------------------------------
+# IDE integrations (official Coder Registry modules). §2/§3/§4: these surface
+# Coder dashboard apps (code-server + JetBrains) against the REAL project dir.
+# Versions are EXACT-pinned (not `latest`, not `~>`) per the deterministic
+# toolchain policy: a future template init must not silently select a different
+# module minor version. See toolchain.json + docs/IDEs.md. §8: the generic
+# git-clone module is intentionally NOT used - the custom checkout-ref.sh
+# supports exact-SHA + dirty-worktree protection it lacks.
+#
+# JetBrains 1.4.0 note: the module's ide_config validation
+#   (var.ide_config == null || length(var.ide_config) > 0)
+# evaluates length() on the null default during template-import plan and
+# fails with "argument must not be null" (a module bug when ide_config is
+# null). We therefore supply a NON-NULL ide_config with pinned Rider/WebStorm
+# build numbers: this is the module's documented air-gapped/pinning path,
+# it makes plan deterministic (no live JetBrains API HTTP call at plan time),
+# and it fixes the null. options/default use product codes (RD=Rider, WS=
+# WebStorm) per the module's accepted codes.
+# ---------------------------------------------------------------------------
+module "code-server" {
+  count                   = data.coder_workspace.me.start_count
+  source                  = "registry.coder.com/coder/code-server/coder"
+  version                 = "1.5.2"
+  agent_id                = coder_agent.main.id
+  folder                  = local.project_dir
+  order                   = 1
+  auto_install_extensions = true
+}
+
+module "jetbrains" {
+  count      = data.coder_workspace.me.start_count
+  source     = "registry.coder.com/coder/jetbrains/coder"
+  version    = "1.4.0"
+  agent_id   = coder_agent.main.id
+  agent_name = "main"
+  folder     = local.project_dir
+  # Rider (.NET) + WebStorm (Node) are the intended Bibliophilarr IDEs (IDEs.md).
+  # Product codes per the jetbrains module (RD=Rider, WS=WebStorm).
+  options = toset(["RD", "WS"])
+  default = toset(["RD", "WS"])
+  tooltip = "Open Bibliophilarr in Rider or WebStorm via JetBrains Toolbox"
+  # Non-null: fixes the 1.4.0 ide_config null-validation plan bug and makes
+  # plan deterministic (skips the live JetBrains API). Real latest stable
+  # builds (majorVersion 2026.2), fetched from data.services.jetbrains.com on
+  # 2026-09-02. When ide_config is set, major_version/channel/release links
+  # must stay at their defaults (not passed here, per the module's validation).
+  ide_config = {
+    RD = { build = "262.9437.287", name = "Rider", icon = "/icon/rider.svg" }
+    WS = { build = "262.9437.145", name = "WebStorm", icon = "/icon/webstorm.svg" }
   }
 }
