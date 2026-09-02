@@ -29,6 +29,7 @@ fi
 # the seed/reset scripts do. (BUG 2026-09-02: this line used to call the function
 # without sourcing, giving "initialize_test_media: command not found" -> the agent
 # was Connected but the startup script exited with an error.)
+# shellcheck source=/dev/null # runtime path; not present in the repo tree
 source /opt/workspace/bin/media-common
 initialize_test_media
 if [[ ${MEDIA_MOUNT_MODE:-none} == read-only ]]; then verify-media; fi

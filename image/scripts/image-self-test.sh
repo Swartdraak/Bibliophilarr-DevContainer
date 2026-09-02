@@ -21,6 +21,7 @@ test -w "$HOME"
 # because media-common is a library, not an executable). Verify it is sourceable
 # and the entrypoint is defined without executing any mutation.
 if [[ -r /opt/workspace/bin/media-common ]]; then
+  # shellcheck source=/dev/null # runtime path; not present in the repo tree
   source /opt/workspace/bin/media-common
   declare -F initialize_test_media >/dev/null \
     || { echo "media-common: initialize_test_media not defined" >&2; exit 1; }
@@ -50,14 +51,16 @@ grep -q 'index_entry_count' /opt/workspace/bin/checkout-ref.sh \
 # must be able to create the exact dirs code-server's install uses. This is the
 # definitive check for the "mkdir ~/.cache/code-server: Permission denied" bug.
 if [[ "$(id -u)" -eq 1000 ]]; then
-  mkdir -p /home/coder/.cache/code-server /home/coder/.config/gh \
-    && touch /home/coder/.cache/code-server/.selftest \
-    || { echo "home/cache: coder (uid 1000) cannot write ~/.cache/code-server" >&2; exit 1; }
+  if ! mkdir -p /home/coder/.cache/code-server /home/coder/.config/gh \
+    || ! touch /home/coder/.cache/code-server/.selftest; then
+    echo "home/cache: coder (uid 1000) cannot write ~/.cache/code-server" >&2; exit 1
+  fi
   rm -f /home/coder/.cache/code-server/.selftest
 fi
 
 # §29-E regression (media-common sourcing): initialize_test_media must be defined
 # after sourcing. Guards against "initialize_test_media: command not found".
+# shellcheck source=/dev/null # runtime path; not present in the repo tree
 if ! source /opt/workspace/bin/media-common 2>/dev/null || ! declare -f initialize_test_media >/dev/null 2>&1; then
   echo "media-common: initialize_test_media not defined after sourcing" >&2; exit 1
 fi
