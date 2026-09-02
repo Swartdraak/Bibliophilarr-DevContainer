@@ -6,6 +6,24 @@ Status on the `feat/live-coder-integration` branch (PR #2). Every claim below is
 `NOT-TESTED`, or `NOT-APPLICABLE`. No step is marked PASS without a real execution
 record, and no live Coder operation is marked PASS without a live Coder result.
 
+## Final closeout (workspace image **0.2.6**)
+
+This section supersedes the `0.2.1`/`0.2.5`/`0.2.5c` figures in the body above,
+which describe prior engineering states. The **single final identity** for the
+deliverable is:
+
+| Artifact                              | Value                                                              |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| Image tag                             | `ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.6`           |
+| Image ID / manifest digest            | `e5df9a70…` / `sha256:e5df9a700d9dc…ad689`                        |
+| `WORKSPACE_IMAGE_VERSION` (runtime)   | `0.2.6`                                                            |
+| `toolchain.json` `workspaceImage`     | `…:0.2.6` + matching manifest                                     |
+| Template `workspace_image` (param)    | `…:0.2.6` (coder_parameter default, follows template version)      |
+
+The container image is a **first-class Coder workspace input** (`data "coder_parameter" "workspace_image"`), so the template, the requested image, the running container, `WORKSPACE_IMAGE_VERSION` and `toolchain.json` all identify the **same artifact** with no host-level retagging. The image is built **only** from `image/Dockerfile` + `scripts/` + `image/scripts/` (source of truth); the earlier ad-hoc overlay builds were diagnostic-only and are not the build definition.
+
+**Note on image distribution (honest, §32):** GHCR (`ghcr.io/swartdraak/…`) is a **placeholder** reference. The live Coder host (`lxc-coder`) has no registry push access, so the 0.2.6 image is a **host-local** build tagged with the ghcr name; a clean host would `docker build` from this repo's `image/Dockerfile` to reproduce the identical digest. This is **not** the ad-hoc retag sequence.
+
 ## Executive summary
 All **local, buildable, testable** work is complete and **CI is green**. The Docker
 workspace image builds from scratch (proven in CI), the nested-Docker + media +

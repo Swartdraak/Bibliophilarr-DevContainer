@@ -62,11 +62,54 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # whole image build; runtime tooling reports copilot as NOT-AVAILABLE if missing.
 RUN (npm install -g @github/copilot && echo 'copilot-cli installed') \
   || echo 'WARNING: Copilot CLI install failed; continuing build'
+# OpenAI Codex CLI (§13/§14 development tooling). Official package:
+# https://github.com/openai/codex : npm install -g @openai/codex.
+# PINNED to 0.152.1 (latest stable as of 2026-09-02) - per the deterministic
+# toolchain policy, no floating "latest". Requires Node >= 18 (we ship 20.x).
+#
+# IMPORTANT BACKEND NOTE (§14, accurate not fabricated): Codex CLI authenticates
+# via a ChatGPT plan sign-in OR an OPENAI_API_KEY against api.openai.com. It does
+# NOT natively point at an arbitrary OpenAI-compatible base URL, so it is NOT the
+# consumer of the local Qwen/vLLM endpoint. The workspace's intended inference
+# backend (local Qwen/vLLM at 192.168.100.102:8000) is used by the Copilot CLI
+# and the Bibliophilarr custom agents - NOT by Codex. Codex presence +
+# `codex --version` is the acceptance target (§31); a functional Codex call
+# requires independent OpenAI auth which is out of scope for this profile.
+# Best-effort install (as with copilot): a transient registry failure must not
+# break the image build; runtime tooling reports codex as NOT-AVAILABLE if missing.
+RUN (npm config set prefix /usr/local \
+    && npm install -g @openai/codex@0.152.1 \
+    && echo 'codex-cli installed') \
+  || echo 'WARNING: Codex CLI install failed; continuing build'
+RUN ln -sf /usr/local/bin/codex /usr/bin/codex
+
+# FIX (§29 code-server): the base image leaves /home/coder/.cache owned by
+# root, so code-server's auto-install (running as the coder user) fails with
+# "mkdir: cannot create directory ~/.cache/code-server: Permission denied",
+# which Coder reports as an agent startup error. Pre-create the exact cache
+# dirs code-server, gh and dotnet use, owned by coder, before switching the
+# user. (A plain `chown -R` of the whole home is not used because it is
+# unreliable on build cache layers; creating the specific dirs is deterministic.)
+RUN mkdir -p /home/coder/.cache/code-server /home/coder/.config/gh /home/coder/.nuget \
+    && chown -R coder:coder /home/coder/.cache /home/coder/.config /home/coder/.nuget
 COPY scripts/ /opt/workspace/bin/
 COPY image/scripts/ /opt/workspace/bin/
 COPY workspace/bin/ /opt/workspace/bin/
 RUN chmod 0755 /opt/workspace/bin/* && ln -s /opt/workspace/bin/* /usr/local/bin/
-ENV WORKSPACE_IMAGE_VERSION=0.2.1
+ENV WORKSPACE_IMAGE_VERSION=0.2.6
 USER coder
 WORKDIR /workspaces
-ENTRYPOINT ["/bin/sh", "-c", "trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done"]
+# Coder agent pattern (root cause of "agent never connects", proven 2026-09-02):
+# Coder injects its agent bootstrap as the container COMMAND (["sh","-c",
+# coder_agent.main.init_script]). Docker runs `ENTRYPOINT` + `CMD`. The previous
+# ENTRYPOINT (a `while :; do sleep 3600; done` keep-alive) ran as PID 1 and
+# silently DISCARDED the Coder command, so `coder agent` was never started and
+# the agent stuck in "connecting" forever.
+#
+# Fix: EMPTY ENTRYPOINT so Coder's command runs directly; a CMD keep-alive only
+# as a fallback when NO command is supplied (manual `docker run`). Coder always
+# supplies a command, so the agent (which ends in `exec ./coder agent`, becoming
+# PID 1) keeps the container alive normally. Never re-add an ENTRYPOINT that
+# swallows the command.
+ENTRYPOINT []
+CMD ["/bin/sh", "-c", "trap 'exit 0' TERM; while :; do sleep 3600 & wait $!; done"]
