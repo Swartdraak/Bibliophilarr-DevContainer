@@ -49,15 +49,15 @@ PASS. GUI interactions that require a browser were not performed and are marked
 | 16 | vLLM model / chat / stream / tool                  | **PASS** (all 4)           | `qwen3.8-27b-fp8` @ `192.168.100.102:8000`; model list, chat, SSE 10 chunks, tool `get_weather` |
 | 17 | Codex CLI presence + config                        | PASS (live NOT-TESTED)     | `codex 0.152.1` installed; `auth NOT_CONFIGURED`; no live run asserted |
 | 18 | Copilot CLI presence                               | PASS                       | `@github/copilot 1.0.82` installed |
-| 19 | **Real orchestrator → repository-architect delegation** | **BLOCKED — AUTH_SOURCE_FAILED** | Copilot CLI requires GitHub fine-grained PAT/OAuth; sandbox only carries a classic PAT which it refuses. Backend (vLLM), agent defs, and strict `verify-agent-runtime` (27 agents, 4 skills) all proven. **Not faked.** |
+| 19 | **Copilot local custom-agent delegation (BYOK → local Qwen)** | **BLOCKED — auth gate + upstream app-repo defect** | Split auth from local Qwen runtime per §12. **Evidence: (a)** `GITHUB_TOKEN` is a **classic PAT (`ghp_`)** injected by Coder; Copilot CLI **refuses** it — it requires a **fine-grained PAT / OAuth**. **This is the only auth blocker.** **(b)** With the token unset, `COPILOT_PROVIDER_*` + `COPILOT_OFFLINE=true` **reach** the local Qwen (vLLM) — **no further auth gate**. **(c)** The remaining blocker is a **genuine defect in the Bibliophilarr app repo (out of scope):** `.github/agents/bibliophilarr-orchestrator.agent.md` frontmatter uses `tools:[...]` (no space) → YAML parse error → agent fails to load (verified live). Backend (local Qwen), BYOK env, and the workspace side are all proven; the delegation itself is blocked by (a) or (c), **not** by the template or the local Qwen runtime. **Not faked.** |
 | 20 | Strict `verify-agent-runtime`                      | PASS                       | 27 agent `.agent.md` files + 4 skills validated |
-| 21 | DinD (nested docker)                               | **BLOCKED — host transient** | Coder-provisioned DinD sidecar consistently hits `containerd` timeout → dockerd exits; a **manual** `docker:27-dind` boots clean (27.5.1). Host transient, not a template defect. |
+| 21 | DinD (nested docker)+ root cause + fix            | **PASS** (root cause: `HOST_RUNTIME_DEFECT`) | **Reproduced identically** in a manually-run `docker:27-dind` (so NOT a Coder/provider difference). Root cause: on the **ZFS host**, containerd's `zfs`/`aufs`/`blockfile`/`devmapper` snapshotter **probes take ~10 s** (the zfs probe runs `zfs list`); Docker's **managed-containerd libcontainerd healthcheck times out before 10 s** → `failed to start containerd: timeout waiting for containerd to start` → dockerd aborts. **Fix (proven):** disable those 4 snapshotters in a containerd config, start an **external** `containerd`, then run `dockerd --containerd=...` (bypasses the healthchecked managed containerd) → containerd boots **0.058 s**, nested daemon + `hello-world` work. Applied to the template (v1.7) and **verified in a Coder-provisioned sidecar**: `docker version` Server=27.5.1, `docker info` overlay2/cgroup v2, compose v5.5.0, `hello-world` OK. The earlier "manual PASS / host transient" was **overturned** (manual also failed without the fix). |
 | 22 | Media write-rejection (RO)                         | PASS                       | `verify-media` RO assertions + `MEDIA_MOUNT_MODE=read-only` enforcement in ws |
-| 23 | Nested media write-rejection (in inner container)  | **BLOCKED** (DinD-dep.)   | Requires a working nested container (see §21) |
-| 24 | Scratch bidirectional (host ↔ inner)               | BLOCKED (DinD-dep.)      | Scratch WRITE proven; full host↔inner bidir needs a nested container (see §21) |
+| 23 | Nested media write-rejection (in inner container)  | **PASS** | With DinD working (§21): a **read-only** media mount; `touch /media/audiobooks/…` → **exit 1 / `Read-only file system`** (rejected); `ls /media/audiobooks` **reads OK** — verified live inside the workspace + from an inner container. |
+| 24 | Scratch bidirectional (ws ↔ inner container)       | **PASS** | **Correct DinD sharing pattern = bind-mount the shared path** (`-v /workspace-test-media:/scratch`), **not** the outer named-volume name (the inner dockerd auto-creates a stray same-named volume, so a named-volume reference does NOT reach the shared scratch). Verified both directions live: ws→nested and nested→ws read back the exact marker. |
 | 25 | stop / start persistence                           | PASS                       | `coder stop` + `coder start` → workspace Healthy again |
 | 26 | destroy / recreate                                 | PASS                       | ws destroyed + recreated → Healthy, repo re-provisioned |
-| 27 | Two simultaneous workspaces                        | PASS                       | `bibl-two-ws` + `bibliophilarr-final-acceptance` both `Started`+Healthy at once; independent repos; disposable removed |
+| 27 | Two simultaneous workspaces + **per-ws & uniqueness evidence** | **PASS** | Two fresh workspaces (`ws-unique-a`/`ws-unique-b`, v1.7) created **concurrently** (exit 0 both, ~21 s apart) and both `Started`+Healthy. **Per-workspace** (each independently): `coder` uid=1000; repo `/workspaces/Bibliophilarr` @ `develop` `1a4d83…` status clean; code-server v4.135.0 app; vLLM reachable; dock socket `unix:///var/run/docker/docker.sock` present; nested `docker` 27.5.1 + compose v5.5.0; media write **rejected** / read **OK**; scratch bidirectional **ok both ways**. **Uniqueness** (host `docker inspect`/`volume ls`): container IDs `4f4153…` vs `7644cc…`; DinD sidecar IDs `f5397bf7…` vs `b9d1de78…`; home/scratch/docker-sock (+nuget/yarn) volume names all differ (`…-a-*` vs `…-b-*`). Disposable ws removed. (Note: the accepted IDE web path in this image is **code-server**; a JetBrains in-box IDE is not part of the 0.2.6 image.) |
 | 28 | Local validation suite (fmt/validate/shell/syntax/JSON/media/checkout) | PASS | terraform fmt+validate, bash -n, `xargs shellcheck` exit 0, JSON, `git diff --check`, `test-checkout.sh`, `test-media.sh` — all PASS; **CI green on merge** |
 | 29 | Regression tests added                             | PASS                       | fresh `--no-checkout` clone regression (`test-checkout.sh`); coder-owned code-server write + media-common source + ENTRYPOINT contract (`image-self-test.sh`) |
 | 30 | Version metadata reconciled (one story)            | PASS                       | Dockerfile WSIV, `variables.tf`, `main.tf` coder_parameter, `toolchain.json`, self-test — all `0.2.6` |
@@ -69,22 +69,45 @@ PASS. GUI interactions that require a browser were not performed and are marked
 
 **Bottom line:** every reachable, in-workspace and local acceptance check is **PASS**.
 The **image identity hard-gate (§9)** passes with no manual retagging — the deliverable
-is a single clean immutable artifact (`0.2.6`, manifest `e5df9a70…`). The four
-**BLOCKED** items (§19, §21, §23, §24) are all **environmental, not template
-defects**: §19 needs a fine-grained GitHub PAT; §21/§23/§24 are a transient
-host-side DinD `containerd` start-timeout (a manual DinD instance boots clean on
-the same host). None was faked into PASS.
+is a single clean immutable artifact (`0.2.6`, manifest `e5df9a70…`). The prior-session
+BLOCKED conclusions have been **corrected with evidence this session**:
+
+- **DinD (§21)** is now **PASS** — root-caused to a `HOST_RUNTIME_DEFECT` (ZFS
+  snapshotter probes exceed Docker's managed-containerd health-check window) with a
+  **proven, applied fix** (external fast containerd; nested daemon + `hello-world`
+  verified in a Coder-provisioned sidecar). It is **not** "host transient / manual
+  works / Coder fails" — manual reproduces the same failure without the fix.
+- **§23 (nested media RO)** and **§24 (scratch bidirectional)** are now **PASS**
+  with the DinD fix in place (correct pattern: bind the shared scratch path, not the
+  outer named-volume name).
+- **§27 (two workspaces)** re-verified with per-workspace evidence **and**
+  container/volume ID uniqueness.
+- **§18 Copilot local custom-agent delegation** is the one remaining **BLOCKED**
+  item, and it has been **split** — the blocker is a **GitHub classic-PAT auth gate**
+  (needs a fine-grained PAT/OAuth) plus a **genuine upstream defect in the
+  Bibliophilarr app repo** (`bibliophilarr-orchestrator.agent.md` frontmatter `tools:[`
+  YAML parse error, out of scope to fix here). The **local Qwen (BYOK) runtime
+  itself is proven reachable** — that is a separate, passing concern. **None of it
+  was faked into PASS.**
+
+The repo is **not** declared fully accepted while §18's auth/PAT + upstream-agent
+items are open — those are accurately classified, not silently dropped.
 
 ## Executive summary
 All **local, buildable, testable** work is complete and **CI is green**. The Docker
-workspace image builds from scratch (proven in CI), the nested-Docker + media +
-scratch architecture is proven against a live DinD replica, and the Terraform
-template is `fmt`-clean and `validate`-clean. The remaining items are strictly
-**live Coder + external-service** verification, **BLOCKED** on a valid Coder API
-token (the token in `~/.config/coder.json` returns **HTTP 403** against
-`coder.onyxfang.info` and is not recoverable from this environment). SSH to the LXC
-host works and was used to audit the live deployment; those blockers are documented,
-not silently assumed.
+workspace image builds from scratch (proven in CI); the Terraform template is
+`fmt`-clean and `validate`-clean. **This session exercised live Coder against
+`coder.onyxfang.info` with a valid token** (template push/v1.7, fresh workspaces,
+nested DinD root-cause + fix, nested media RO, scratch bidirectional, two-workspace
+reproducibility + uniqueness, local vLLM) — **not** "blocked on a 403 token" as the
+earlier draft claimed.
+
+The one remaining **BLOCKED** item is **Copilot local custom-agent delegation
+(§18)**, now **split** from the local Qwen runtime: the blocker is a **GitHub
+classic-PAT auth gate** (needs a fine-grained PAT/OAuth) and an **upstream
+Bibliophilarr app-repo agent-file YAML defect** (out of scope). The **local Qwen
+(BYOK) runtime is proven reachable**. The repo is **not declared fully accepted**
+while §18's auth + upstream-agent items are open.
 
 ## Repository and Git state — PASS
 - Branch `feat/live-coder-integration` cut from `main` @ `378c0ac`; pushed; PR #2
@@ -113,10 +136,17 @@ not silently assumed.
   socket `0666` and `chown`s the shared `scratch` volume to `1000:1000`.
 - Media libs + scratch also mounted into the sidecar so inner bind mounts resolve
   to the same `/media/*` and `/workspace-test-media` paths.
-- **Proven against a live DinD replica**: inner client/server 29.7.2/27.5.1,
-  compose v5.5.0; inner `hello-world` succeeds; read-only media reads succeed and
-  writes are rejected (`Read-only file system`) in both workspace and inner
-  container (Phase 31); shared scratch is bidirectional (Phase 33).
+- **Proven against a live DinD replica** (standalone, started outside Coder): inner
+  client/server 29.7.2/27.5.1, compose v5.5.0; inner `hello-world` succeeds;
+  read-only media reads succeed and writes are rejected (`Read-only file system`);
+  shared scratch is bidirectional.
+- **Root-cause fix (v1.7, this session):** the socket fix above was necessary but
+  **not sufficient** — on the ZFS host the sidecar's **managed containerd timed out**
+  (slow snapshotter probes) and dockerd aborted. v1.7 now starts an **external fast
+  containerd** (slow snapshotters disabled) and points `dockerd --containerd` at it,
+  and this is **verified nested inside a Coder-provisioned sidecar**. See §21 for the
+  full evidence. (The inner→outer scratch share must use a **bind mount of the shared
+  path**, not the outer named-volume name — see §24.)
 - Provider versions aligned to the lock: `coder 2.18.0`, `docker 3.9.0`.
 
 ## CI / GitHub Actions — PASS (CI)
@@ -139,22 +169,32 @@ not silently assumed.
   `/media` mount). `CODER_AGENT_TOKEN` comes from the `coder_agent` resource
   (Terraform interpolation), never hardcoded.
 
-## BLOCKED (live Coder + external services)
-Require a **valid Coder API token** for `https://coder.onyxfang.info`; the token in
-`~/.config/coder.json` returns **HTTP 403** and is not recoverable here. SSH to
-`lxc-coder` worked for auditing the live deployment, but API-scoped operations need
-the token. These are **not** passed on the strength of local design proof:
-- Template `coder template push`, live template versioning and rollback.
-- Workspace provisioning (dev / exact-SHA / staging-validation), dirty-worktree
-  skip in a live workspace, stop/start, destroy/recreate.
-- IDE acceptance (VS Code / Rider / WebStorm) in live workspaces.
-- Live agent runtime: real `orchestrator` → `repository-architect` delegation
-  against the live vLLM endpoint and the live `verify-local-llm` model/completion/
-  streaming/tool-call functional test.
-- Two-workspace reproducibility in live Coder.
+## Live Coder + external services — EXERCISED this session (corrects prior 403-token claim)
+> **Correction:** the prior draft claimed `~/.config/coder.json` returned HTTP 403
+> and that live work was "BLOCKED on a valid token." **That is false for this
+> session.** A valid `CODER_SESSION_TOKEN` **was** used against `coder.onyxfang.info`
+> and drove every live operation below — none was passed on local design proof.
 
-Once a valid Coder token is available, the exact commands are in
-`OPERATOR-RUNBOOK.md`.
+Live operations performed and evidenced this session (all exit 0 / PASS):
+- **Template push + versioning:** `v1.6` and `v1.7` pushed + `v1.7` **activated**
+  against the live template (DinD root-cause fix + Copilot BYOK env).
+- **Workspace provisioning:** fresh `dind-v17-verify`, `ws-unique-a`, `ws-unique-b`
+  (`coder create` exit 0, `Started`+Healthy) on the live host.
+- **Live DinD root cause + fix:** reproduced, root-caused (ZFS `containerd` probe
+  timeout), fixed (external fast containerd), and **verified nested** in a
+  Coder-provisioned sidecar (see §21).
+- **Nested media RO + scratch bidirectional:** PASS live (see §23/§24).
+- **Two-workspace reproducibility + uniqueness:** PASS live (see §27).
+- **Local LLM (vLLM):** reachability + model/completion/stream/tool verified live
+  (§16).
+- **Copilot local custom-agent delegation (§18):** **BLOCKED** — but **not** on a
+  Coder token. The live evidence shows a **GitHub classic-PAT auth gate** and an
+  **upstream app-repo agent-file YAML defect**; the local Qwen (BYOK) runtime is
+  proven reachable. See §18 for the split.
+
+Remaining work to close §18 (auth): supply a **fine-grained GitHub PAT** (or OAuth)
+so Copilot's auth gate passes, and fix the upstream `bibliophilarr-orchestrator.agent.md`
+frontmatter. Commands are in `OPERATOR-RUNBOOK.md`.
 
 ## Not applicable / unchanged
 - The `Bibliophilarr` application repository was **not** modified (out of scope;

@@ -163,8 +163,21 @@ resource "coder_agent" "main" {
     LOCAL_LLM_MODEL              = data.coder_parameter.vllm_model.value
     LOCAL_LLM_CONTEXT_LENGTH     = data.coder_parameter.vllm_context_window.value
     COPILOT_OFFLINE              = tostring(data.coder_parameter.copilot_offline.value)
-    MEDIA_MOUNT_MODE             = data.coder_parameter.media_mount_mode.value
-    DOCKER_HOST                  = data.coder_parameter.container_validation_enabled.value ? "unix:///var/run/docker/docker.sock" : ""
+    # ByokProvider (official Copilot CLI custom-model-provider env; see
+    # docs.github.com/.../customize-copilot/use-byok-models). This is the
+    # LOCAL Qwen/vLLM custom-agent runtime — it is intentionally SEPARATE from
+    # GitHub cloud auth. When the selected provider is the OpenAI-compatible
+    # local vLLM, map our Coder params to the COPILOT_PROVIDER_* vars so
+    # `copilot --agent <name>` / custom-agent delegation use the local model.
+    # COPILOT_PROVIDER_API_KEY is omitted: the docs state it is "not required
+    # for providers that do not use authentication, such as a local Ollama
+    # instance" — and a keyless local vLLM needs none. We do NOT invent extra
+    # vars or reference GITHUB_TOKEN here.
+    COPILOT_PROVIDER_BASE_URL = data.coder_parameter.inference_provider.value == "vllm" ? data.coder_parameter.vllm_base_url.value : ""
+    COPILOT_PROVIDER_TYPE     = data.coder_parameter.inference_provider.value == "vllm" ? "openai" : ""
+    COPILOT_MODEL             = data.coder_parameter.inference_provider.value == "vllm" ? data.coder_parameter.vllm_model.value : ""
+    MEDIA_MOUNT_MODE          = data.coder_parameter.media_mount_mode.value
+    DOCKER_HOST               = data.coder_parameter.container_validation_enabled.value ? "unix:///var/run/docker/docker.sock" : ""
     # NOTE: GITHUB_TOKEN is NOT set here. It is auto-injected by Coder from the
     # operator's Coder Secret "Swartdraak GH PAT" (--env GITHUB_TOKEN) at
     # workspace start. The startup script uses $GITHUB_TOKEN to configure `gh`
@@ -292,14 +305,26 @@ resource "docker_container" "docker" {
   #     non-root workspace can write scratch and inner containers (root, via
   #     the daemon) can read it.
   #
-  # COMMAND NOTE (v0.6): the previous one-liner embedded nested double-quotes
-  # (chown / dockerd in \"...\" ) under `set -e`; busybox sh on docker:27-dind
-  # parsed each quoted segment as a single command name, so the container
-  # "exited immediately" before dockerd ever started. It also routed through
-  # dockerd-entrypoint.sh, whose `set -eu` TLS/SAN generation is unnecessary
-  # for a plain unix-socket bridge and can abort boot. Start dockerd directly on
-  # the socket (no nested quotes, no set -e) and keep a plain keep-alive loop.
-  command = ["sh", "-c", "chown -R 1000:1000 /workspace-test-media 2>/dev/null || true; dockerd --host=unix:///var/run/docker/docker.sock >/tmp/dind.log 2>&1 & while :; do if [ -S /var/run/docker/docker.sock ]; then chmod 0666 /var/run/docker/docker.sock 2>/dev/null || true; fi; sleep 1; done"]
+  # COMMAND NOTE (fast-containerd bridge; root-cause fix for the 2026-09-02 nested
+  # DinD failure). Symptom on a Proxmox/ZFS host: the nested dockerd log read
+  #   "containerd successfully booted in ~10.1s"
+  #   "stopping healthcheck following graceful shutdown"
+  #   "failed to start containerd: timeout waiting for containerd to start"
+  # Root cause: containerd's zfs/aufs/blockfile/devmapper SNAPSHOTTER PLUGINS are
+  # probed at boot; on this ZFS host the zfs probe runs `zfs list` against the
+  # pool (~10s), so total containerd boot exceeds Docker's managed-containerd
+  # libcontainerd startup healthcheck window, and dockerd aborts with the false
+  # "timeout" even though containerd DID boot. This reproduced identically in a
+  # manually-run docker:27-dind on the same host, so it is a HOST_RUNTIME property
+  # (slow containerd startup), NOT a Coder/provider difference.
+  #
+  # Fix (minimal, command-only): pre-seed a containerd config that disables the
+  # irrelevant slow snapshotters (overlay2 is the actual driver), run containerd
+  # with it (~0.06s boot), then run dockerd --containerd=<sock> against that
+  # external containerd so dockerd does not launch its own (healthchecked)
+  # managed containerd. Keeps: privilege, bridge network, shared scratch/sock
+  # volumes, RO media mounts, and the socket-chmod keep-alive. No new resources.
+  command = ["sh", "-c", "chown -R 1000:1000 /workspace-test-media 2>/dev/null || true; mkdir -p /etc/containerd && printf 'version = 2\\n[plugins.\"io.containerd.snapshotter.v1.blockfile\"]\\n  disable = true\\n[plugins.\"io.containerd.snapshotter.v1.devmapper\"]\\n  disable = true\\n[plugins.\"io.containerd.snapshotter.v1.aufs\"]\\n  disable = true\\n[plugins.\"io.containerd.snapshotter.v1.zfs\"]\\n  disable = true\\n' > /etc/containerd/fast.toml; /usr/local/bin/containerd --config /etc/containerd/fast.toml >/tmp/containerd.log 2>&1 & for i in $(seq 1 20); do if [ -S /var/run/containerd/containerd.sock ]; then break; fi; sleep 1; done; sleep 2; dockerd --containerd=/var/run/containerd/containerd.sock --host=unix:///var/run/docker/docker.sock >/tmp/dind.log 2>&1 & while :; do if [ -S /var/run/docker/docker.sock ]; then chmod 0666 /var/run/docker/docker.sock 2>/dev/null || true; fi; sleep 1; done"]
   # The DinD daemon's bind mounts resolve against the host paths below.
   volumes {
     volume_name    = docker_volume.scratch.name
