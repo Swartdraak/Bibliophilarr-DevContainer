@@ -34,6 +34,18 @@ source /opt/workspace/bin/media-common
 initialize_test_media
 if [[ ${MEDIA_MOUNT_MODE:-none} == read-only ]]; then verify-media; fi
 if [[ ${LOCAL_LLM_PROVIDER:-none} == vllm ]]; then verify-local-llm --quick || echo "WARNING: local LLM check failed"; fi
+# §1/#2 IDE BYOK provisioning: when a local OpenAI-compatible provider (vLLM) is
+# selected, deterministically pre-config the IDE clients from the Coder params
+# (no hardcoded IP/model). The Copilot CLI is already covered by COPILOT_PROVIDER_*
+# in the agent env; VS Code gets a chatLanguageModels.json customendpoint entry.
+/opt/workspace/bin/apply-ide-byok.sh || echo "WARNING: apply-ide-byok reported an issue (non-fatal; IDE BYOK)"
+# §7 deterministic minimal MCP/tool registration for the custom agents (the
+# orchestrator + repository-architect declare exactly 5 MCP servers; registering
+# them avoids the "tool unavailable -> agent freezes" live symptom).
+/opt/workspace/bin/register-copilot-mcp.sh || echo "WARNING: copilot mcp registration reported an issue (non-fatal)"
+# §8 deterministic JetBrains remote-backend layout (persistent dirs on the home
+# volume; prevents re-download/reinstall churn on first connect + reconnect).
+/opt/workspace/bin/prepare-jetbrains-backend.sh || echo "WARNING: jetbrains backend prepare reported an issue (non-fatal)"
 /opt/workspace/bin/verify-workspace.sh "$repo_dir"
 # verify-agent-runtime checks repository CONTENT (.github/agents, skills,
 # instructions). Those are a runtime convenience, not a workspace-correctness

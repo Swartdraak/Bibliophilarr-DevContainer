@@ -5,6 +5,9 @@ data "coder_workspace_owner" "me" {}
 # git ops, and the agent dir). §4: no placeholder paths.
 locals {
   project_dir = "/workspaces/Bibliophilarr"
+  # Coder user home, persisted on the -home named volume (survives stop/start).
+  # JetBrains remote-backend dirs are pinned here so reconnects reuse them.
+  coder_home = "/home/coder"
 }
 
 # NOTE on GitHub auth (§4/§25): the operator pre-created the Coder Secret
@@ -80,11 +83,11 @@ data "coder_parameter" "inference_provider" {
 # template, the requested image, the running container, WORKSPACE_IMAGE_VERSION and
 # toolchain.json all identify the SAME artifact. A plain Terraform variable was being
 # resolved to a stale memoized host value, so it is intentionally NOT used for the
-# container image. 0.2.6 is the final clean image built from image/Dockerfile.
+# container image. 0.2.7 is the final clean image built from image/Dockerfile.
 data "coder_parameter" "workspace_image" {
   name         = "workspace_image"
   display_name = "Workspace image"
-  default      = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.6"
+  default      = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.7"
   mutable      = true
   order        = 0
 }
@@ -178,6 +181,24 @@ resource "coder_agent" "main" {
     COPILOT_MODEL             = data.coder_parameter.inference_provider.value == "vllm" ? data.coder_parameter.vllm_model.value : ""
     MEDIA_MOUNT_MODE          = data.coder_parameter.media_mount_mode.value
     DOCKER_HOST               = data.coder_parameter.container_validation_enabled.value ? "unix:///var/run/docker/docker.sock" : ""
+    # §8 JetBrains backend determinism: force the Coder JetBrains remote
+    # backend (Rider/WebStorm) to use PERSISTENT config/plugins/system paths on
+    # the home volume, so reconnects do NOT re-download the build or reinstall
+    # plugins (the root cause of the "Channel closed / executor rejected /
+    # re-download on first launch" churn). These are documented JetBrains IDE
+    # dir-override env vars (<product>.config.path / .plugins.path / .system.path
+    # / .log.path); product codes match the jetbrains module (RD=Rider,
+    # WS=WebStorm -> env uses the human product name Rider/WebStorm). Persisted
+    # as long as the home volume persists (stop/start); a delete/recreate
+    # re-seeds via the startup preparation step (apply-jetbrains-backend.sh).
+    Rider_config_path     = "${local.coder_home}/.config/JetBrains/Rider"
+    Rider_plugins_path    = "${local.coder_home}/.local/share/JetBrains/Rider"
+    Rider_system_path     = "${local.coder_home}/.cache/JetBrains/Rider"
+    Rider_log_path        = "${local.coder_home}/.cache/JetBrains/Rider/log"
+    WebStorm_config_path  = "${local.coder_home}/.config/JetBrains/WebStorm"
+    WebStorm_plugins_path = "${local.coder_home}/.local/share/JetBrains/WebStorm"
+    WebStorm_system_path  = "${local.coder_home}/.cache/JetBrains/WebStorm"
+    WebStorm_log_path     = "${local.coder_home}/.cache/JetBrains/WebStorm/log"
     # NOTE: GITHUB_TOKEN is NOT set here. It is auto-injected by Coder from the
     # operator's Coder Secret "Swartdraak GH PAT" (--env GITHUB_TOKEN) at
     # workspace start. The startup script uses $GITHUB_TOKEN to configure `gh`
@@ -368,6 +389,21 @@ resource "docker_container" "docker" {
 # and it fixes the null. options/default use product codes (RD=Rider, WS=
 # WebStorm) per the module's accepted codes.
 # ---------------------------------------------------------------------------
+# code-server is scoped as a BROWSER EDITOR / TERMINAL / Git / Docker /
+# Copilot CLI / local Qwen-via-CLI surface (NOT Microsoft Copilot Agent Mode).
+# It is a Coder development environment (not an arbitrary untrusted repo), so
+# the workspace-trust step is DISABLED deterministically. --disable-workspace-trust
+# on the CLI plus the user setting cover the startup path; telemetry off for a
+# controlled environment. (§9)
+#
+# §5 extension split: the required REMOTE extensions (csdevkit C#, Docker,
+# Python, ESLint, Copilot) are the VS Code DESKTOP remote surface (read by
+# Desktop from .devcontainer/devcontainer.json on connect). code-server is the
+# OSS VS Code build and cannot resolve/install several Desktop-only extensions
+# (csdevkit, remote-containers, Copilot chat) — forcing auto_install makes its
+# startup report extension-install failures. code-server is intentionally NOT the
+# C# surface, so it does not auto-install that desktop inventory (reproducible
+# via .devcontainer for VS Code Desktop).
 module "code-server" {
   count                   = data.coder_workspace.me.start_count
   source                  = "registry.coder.com/coder/code-server/coder"
@@ -375,7 +411,14 @@ module "code-server" {
   agent_id                = coder_agent.main.id
   folder                  = local.project_dir
   order                   = 1
-  auto_install_extensions = true
+  auto_install_extensions = false
+  additional_args         = "--disable-workspace-trust"
+  settings = {
+    "security.workspace.trust.enabled"        = false
+    "security.workspace.trust.untrustedFiles" = "open"
+    "telemetry.level"                         = "off"
+    "workbench.startupEditor"                 = "welcome"
+  }
 }
 
 module "jetbrains" {
