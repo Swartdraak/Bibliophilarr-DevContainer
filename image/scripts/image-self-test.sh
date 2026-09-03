@@ -29,10 +29,10 @@ else
   echo "media-common: /opt/workspace/bin/media-common not readable" >&2; exit 1
 fi
 
-# §19/§30 image version must be the final clean 0.2.7 artifact (0.2.7 adds
-# .NET SDK 10 to satisfy Bibliophilarr global.json while retaining .NET 8).
-test "${WORKSPACE_IMAGE_VERSION:-}" = "0.2.7" \
-  || { echo "WORKSPACE_IMAGE_VERSION=${WORKSPACE_IMAGE_VERSION:-unset} (expected 0.2.7)" >&2; exit 1; }
+# §19/§30 image version must be the final clean artifact (0.2.8 adds the headless
+# `assign-task` helper + the Rider NuGet ownership startup fix; 0.2.7 added .NET 10).
+test "${WORKSPACE_IMAGE_VERSION:-}" = "0.2.8" \
+  || { echo "WORKSPACE_IMAGE_VERSION=${WORKSPACE_IMAGE_VERSION:-unset} (expected 0.2.8)" >&2; exit 1; }
 
 # .NET SDK provisioning: global.json requires the 10.0 SDK (e.g. 10.0.400) and
 # the project still uses a 8.0 target/runtime, so BOTH must be installed. A
