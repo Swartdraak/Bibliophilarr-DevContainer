@@ -31,15 +31,27 @@ AGENT="bibliophilarr-orchestrator"
 ALLOW_GH=0
 TASK=""
 REPO_DIR="${BIBLIOPHILARR_REPOSITORY_DIR:-/workspaces/Bibliophilarr}"
-TIMEOUT_SECS="${ASSIGN_TASK_TIMEOUT_SECS:-1500}"
+# Wall-clock cap (safety net). The local 27B is fast per token but SLOW for long
+# agentic loops AND can get stuck repeating a tool call (observed live: looping on
+# `Read` of non-existent paths). MAX_TURNS caps the agentic loop itself so a weak
+# local model cannot spin forever; both caps are overridable envs.
+TIMEOUT_SECS="${ASSIGN_TASK_TIMEOUT_SECS:-900}"
+MAX_TURNS="${ASSIGN_TASK_MAX_TURNS:-24}"
 
 usage() {
   cat >&2 <<'H'
-Usage: assign-task [--github] [--agent NAME] "<task prompt>"
+Usage: assign-task [--github] [--agent NAME] [--max-turns N] "<task prompt>"
   --github          allow GitHub writes (uses injected GITHUB_TOKEN). Default: read-only.
   --agent NAME      target agent (default: bibliophilarr-orchestrator, which delegates
                     to the app's subagents as designed).
+  --max-turns N     cap the agentic loop (default 24; env ASSIGN_TASK_MAX_TURNS).
+                    Guards against the local 27B getting stuck in a tool-call loop.
   "<task prompt>"   what the agent should do (work in /workspaces/Bibliophilarr).
+
+NOTE: the local qwen3.8-27b-fp8 is good for SINGLE/BOUNDED tasks. Avoid prompts
+that invite a repo-wide crawl ("summarize every subagent and map the app") — the
+weak local model loops on wrong paths. Keep tasks scoped; raise --max-turns only
+if a legitimately long task needs it.
 H
 }
 
@@ -48,6 +60,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --github) ALLOW_GH=1; shift ;;
     --agent) AGENT="${2:?--agent needs a value}"; shift 2 ;;
+    --max-turns) MAX_TURNS="${2:?--max-turns needs a value}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "unknown flag: $1 (see --help)" >&2; usage; exit 2 ;;
     *) TASK="$1"; shift ;;
@@ -88,17 +101,19 @@ done
 
 GHLABEL="no(restricted)"
 [[ ${ALLOW_GH} -eq 1 ]] && GHLABEL="yes"
-echo "assign-task: agent=${AGENT} github=${GHLABEL} fixed_yaml_files=${#FIXED[@]} timeout=${TIMEOUT_SECS}s"
-echo "assign-task: model=local(vLLM qwen3.8-27b-fp8) repo=${REPO_DIR}"
+echo "assign-task: agent=${AGENT} github=${GHLABEL} max_turns=${MAX_TURNS} timeout=${TIMEOUT_SECS}s fixed_yaml_files=${#FIXED[@]}"
+echo "assign-task: model=local(vLLM qwen3.8-27b-fp8) repo=${REPO_DIR}  (keep tasks BOUNDED; weak local model loops on repo-wide crawls)"
 
 # Run the agent on the LOCAL model. Unset GitHub tokens unless --github (read-only default).
 run() {
+  # --max-turns caps the agentic loop (the Copilot CLI flag) so the local 27B cannot
+  # spin on repeated tool calls; the wall-clock timeout is a second safety net.
   if [[ ${ALLOW_GH} -eq 1 ]]; then
     echo "assign-task: GitHub AUTH ALLOWED (--github); using injected GITHUB_TOKEN for repo writes"
-    env timeout "${TIMEOUT_SECS}" copilot --add-dir "${REPO_DIR}" --agent "${AGENT}" -p "${TASK}"
+    env timeout "${TIMEOUT_SECS}" copilot --add-dir "${REPO_DIR}" --agent "${AGENT}" --max-turns "${MAX_TURNS}" -p "${TASK}"
   else
     echo "assign-task: READ-ONLY (GITHUB_TOKEN unset for this run; local model only)"
-    env -u GITHUB_TOKEN -u GH_TOKEN -u GH_PAT timeout "${TIMEOUT_SECS}" copilot --add-dir "${REPO_DIR}" --agent "${AGENT}" -p "${TASK}"
+    env -u GITHUB_TOKEN -u GH_TOKEN -u GH_PAT timeout "${TIMEOUT_SECS}" copilot --add-dir "${REPO_DIR}" --agent "${AGENT}" --max-turns "${MAX_TURNS}" -p "${TASK}"
   fi
 }
 rc=0

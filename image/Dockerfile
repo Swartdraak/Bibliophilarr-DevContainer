@@ -105,12 +105,12 @@ COPY scripts/ /opt/workspace/bin/
 COPY image/scripts/ /opt/workspace/bin/
 COPY workspace/bin/ /opt/workspace/bin/
 RUN chmod 0755 /opt/workspace/bin/* && ln -s /opt/workspace/bin/* /usr/local/bin/
-# 0.2.8 (§4 + §12 headless): assign-task helper (submit a task to the orchestrator
-# agent without opening an IDE, read-only by default, --github for writes, auto
-# YAML workaround + trap-revert) and a startup-script NuGet ownership pre-step
-# (fixes Rider restore "Permission denied" on the root-owned /home/coder/.nuget/packages
-# named volume).
-ENV WORKSPACE_IMAGE_VERSION=0.2.8
+# 0.2.9: assign-task loop-guard — the local 27B can get stuck repeating a tool
+# call on long/vague prompts (observed live looping on `Read` of non-existent
+# paths). assign-task now caps the agentic loop with --max-turns (default 24,
+# env ASSIGN_TASK_MAX_TURNS) + a shorter wall-clock timeout (default 900s), and
+# its usage warns to keep prompts BOUNDED. 0.2.8 added assign-task + NuGet fix.
+ENV WORKSPACE_IMAGE_VERSION=0.2.9
 USER coder
 WORKDIR /workspaces
 # Coder agent pattern (root cause of "agent never connects", proven 2026-09-02):
