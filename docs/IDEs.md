@@ -40,8 +40,8 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
 | Workspace/Connection | PASS | Gateway `Rider://` connection, 0-1 s handshake; pinned build `262.9437.287` (§8) |
 | Persistent backend | PASS | `~/.config|share|cache/JetBrains/Rider` present, owned **1000:1000**, via `Rider_*_path` env (§6/#8) |
 | Copilot plugin install | PASS (installable) | plugin **can** be installed into the persistent `Rider_*_plugins_path` (Toolbox/Coder `ide_config` preselect); the workspace does not force-install (least privilege) |
-| Copilot plugin local BYOK | **PASS (after user auth)** | once the user authenticates the Copilot session (one-time GitHub/OAuth login), BYOK lets it target the local OpenAI-compatible endpoint; **the login is the only gating step** and cannot be scripted |
-| **AI Assistant BYOK (local LLM)** | **PASS (config) / auth step manual** | `prepare-jetbrains-ai.sh` pre-seeds the "OpenAI-compatible" provider (url+model from `vllm_base_url`/`vllm_model`) + maps **all 27** repo agents to prompts; **proven live** in-ws. First chat needs the one-time interactive AI Assistant auth (not scriptable) |
+| Copilot plugin local BYOK | **FAIL (compat) / manual** | pinned Rider **262.9437.287 (2026.2)** + auto-installed Copilot plugin **1.8.2-243** **crash** (`NoClassDefFoundError: ProjectLevelVcsManager`) — a plugin-vs-IDE-build compatibility defect; **not** caused by this template. Plugin is **not forced** (least privilege); user disables it. In-IDE Copilot local BYOK therefore **unavailable as pinned**; use Copilot CLI / VS Code |
+| **AI Assistant local LLM** | **NOT_SUPPORTED_BY_CLIENT** (best-effort scaffold) | AI Assistant is a **commercial plugin NOT installed by the Coder module** + needs an **AI subscription** + interactive auth; JetBrains has **no documented config preseed**. `prepare-jetbrains-ai.sh` writes a **best-effort** provider (url+model from `vllm_base_url`/`vllm_model`) + maps **27** repo agents to prompt files, so IF the IDE has AI Assistant installed/licensed the config is there — but it does **not** itself give the IDE local AI |
 | MCP (JetBrains) | NOT-TESTED (manual) | JetBrains MCP config is per-install, manual; not force-installed (least privilege) |
 | First-launch churn | PASS_WITH_LIMITATIONS | transport reconnect is normal; one-time `.NET` build is **deterministic** via `ide_config` pin (§8) |
 
@@ -51,8 +51,8 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
 | Workspace/Connection | PASS | Gateway `WebStorm://`, pinned build `262.9437.145` (§8) |
 | Persistent backend | PASS | `~/.config|share|cache/JetBrains/WebStorm` present, owned 1000:1000, via `WebStorm_*_path` env (§6/#8) |
 | Copilot plugin install | PASS (installable) | same as Rider — installable into persistent `WebStorm_*_plugins_path`; not force-installed (least privilege) |
-| Copilot plugin local BYOK | **PASS (after user auth)** | same as Rider — BYOK targets the local endpoint once the user authenticates (one-time login, not scriptable) |
-| **AI Assistant BYOK (local LLM)** | **PASS (config) / auth step manual** | same as Rider — provider (url+model from `vllm_base_url`/`vllm_model`) + **all 27** repo agents mapped to prompts; **proven live** in-ws |
+| Copilot plugin local BYOK | **FAIL (compat) / manual** | same as Rider — pinned 2026.2 build + auto Copilot plugin crash; not forced; use Copilot CLI / VS Code |
+| **AI Assistant local LLM** | **NOT_SUPPORTED_BY_CLIENT** (best-effort scaffold) | same as Rider — AI Assistant is a commercial plugin (not in Coder module) + AI subscription + interactive auth; `prepare-jetbrains-ai.sh` scaffold is best-effort only |
 | MCP (JetBrains) | NOT-TESTED (manual) | same as Rider |
 
 ## BYOK separation (the core remediation)
@@ -61,29 +61,29 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
   `scripts/apply-ide-byok.sh` (writes `chatLanguageModels.json` from Coder params) and
   `COPILOT_PROVIDER_*` env, so the local `qwen3.8-27b-fp8` model is selected **without
   a Microsoft GitHub login**.
-* **JetBrains (Rider/WebStorm)** — the Copilot plugin **can be installed** into the
-  persistent `Rider_*_plugins_path` / `WebStorm_*_plugins_path` (Toolbox / Coder
-  `ide_config` preselect). Once the user **authenticates the Copilot session**
-  (one-time GitHub/OAuth login), **Copilot BYOK can point at the local
-  OpenAI-compatible endpoint**, so JetBrains *can* use the local `qwen3.8-27b-fp8`
-  model. **JetBrains AI Assistant** (OpenAI-compatible) is the local-model vehicle, and
-  it is now **deterministically pre-seeded** at startup by `scripts/prepare-jetbrains-ai.sh`:
-  - the **AI Assistant "OpenAI-compatible" provider** is written into the persistent
-    `Rider`/`WebStorm` config dirs using the template variables `vllm_base_url`
-    (`LOCAL_LLM_BASE_URL`) and `vllm_model` (`LOCAL_LLM_MODEL`) — no hardcoded IP/model;
-    the API key is optional/keyless for the local endpoint.
-  - **the repository's custom agents** (`.github/agents/*.agent.md`) are mapped to
-    **JetBrains custom prompts** (one per agent, tagged with `vllm_model`), so the
-    orchestrator / repository-architect / QA / release / governance roles designed in the
-    repo are usable in the IDE chat. **Proven live** on a fresh v1.9/0.2.7 workspace:
-    the provider XML (url + `qwen3.8-27b-fp8` model) and **all 27** agent prompts landed
-    in both products' config dirs at startup.
-  - The **one non-automatable step** remains the interactive **AI Assistant session
-    authentication** (a JetBrains-required login) — so "configuration" is PASS (proven),
-    while "first chat" still needs the user's one-time login. This is an **auth-step
-    limitation, not an inability to support BYOK**. (JetBrains ships no documented,
-    stable provider/prompt config-file schema, so the preseed is a deterministic
-    best-effort scaffold; the running build is verified to load the layout.)
+* **JetBrains (Rider/WebStorm)** — the in-IDE AI surface is **limited** (corrected
+  2026-09-04 after live first-launch testing):
+  - **GitHub Copilot plugin**: the Coder module does **not** force-install it
+    (least privilege). The auto-installed plugin **1.8.2-243** is
+    **incompatible with the pinned Rider 262.9437.287 (2026.2)** — it crashes with
+    `NoClassDefFoundError: com/intellij/openapi/vcs/ProjectLevelVcsManager`
+    (a plugin-vs-IDE-build compatibility defect, **not** caused by this template, and
+    not fixable from here — we cannot patch a third-party plugin's classpath). So
+    in-IDE Copilot local BYOK is **unavailable as pinned** (user disables the crashing
+    plugin). The proven local-model + custom-agent surface is **VS Code / code-server /
+    Copilot CLI**.
+  - **JetBrains AI Assistant**: a **commercial plugin NOT installed by the Coder module**,
+    requiring a **JetBrains AI subscription** and an interactive session login; JetBrains
+    provides **no documented config-file preseed**. `scripts/prepare-jetbrains-ai.sh`
+    therefore only writes a **best-effort scaffold** — the OpenAI-compatible provider
+    (url + model from `vllm_base_url`/`vllm_model`, no hardcoded IP/model) plus the
+    repo's `.github/agents/*.agent.md` mapped to per-product prompt files (one per
+    agent, tagged with `vllm_model`). If the IDE does **not** have AI Assistant
+    installed/licensed, the scaffold is **inert** (this is why "AI Assistant: not
+    installed" can appear after first launch). **Proven live** that the scaffold files
+    (provider XML url+model + 27 agent prompts) land in both products' persistent
+    config dirs at startup; the IDE consuming them depends on the user having AI
+    Assistant installed + licensed + authenticated.
 
 ## §11 custom-agent / subagent + local-model proof
 
