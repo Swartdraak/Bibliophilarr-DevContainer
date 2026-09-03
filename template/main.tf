@@ -154,6 +154,16 @@ resource "coder_agent" "main" {
   startup_script_behavior = "blocking"
   startup_script          = <<-EOT
     set -eu
+    # §4 NuGet restore fix: the `nuget` named volume mounts at /home/coder/.nuget/packages.
+    # On FIRST attach of an empty Docker named volume, docker creates it root-owned, so
+    # Rider's NuGet restore (running as the `coder` user) fails:
+    #   "Access to the path '/home/coder/.nuget/packages/...' is denied. (Permission denied)"
+    # This startup script runs as the `coder` user; ensure the package-cache dir is
+    # coder-owned so restore/build succeed. Best-effort (non-fatal): if the dir is still
+    # not ours (edge: a prior root-owned mount), the line is skipped and the user can
+    # re-run; it self-heals on the next coder-owned run. Never blocks startup.
+    mkdir -p /home/coder/.nuget/packages 2>/dev/null || true
+    chown -R "$(id -u):$(id -g)" /home/coder/.nuget 2>/dev/null || true
     /opt/workspace/bin/workspace-startup.sh
   EOT
   env = {
