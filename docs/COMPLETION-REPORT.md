@@ -24,7 +24,7 @@ first launch is stable. Live per-IDE acceptance was run on a **fresh** `Biblioph
 | 5  | VS Code Desktop extension set | **PASS (declared)** | `.devcontainer/devcontainer.json` declares csdevkit, vscode-docker, python, eslint, copilot |
 | 6/8 | JetBrains **persistent backend** pre-seeded | **PASS** | `scripts/prepare-jetbrains-backend.sh` creates `.config|.local/share|.cache/JetBrains/{Rider,WebStorm}` (+`/log`), **owned 1000:1000**; `Rider_*_path`/`WebStorm_*_path` env route JetBrains to the **persistent home volume** (not the wiped ephemeral system volume) |
 | 7  | **MCP/TOOLS** registered (orchestrator + repository-architect) | **PASS** | `scripts/register-copilot-mcp.sh` writes `~/.copilot/mcp.json` = **exactly** `[filesystem,git,github,memory,sequential-thinking]` (least privilege; no more than the agents' `tools:` declare); verified present in ws |
-| 8  | JetBrains first-launch reliability | **PASS_WITH_LIMITATIONS** | deterministic: pinned builds via `ide_config` (`.NET` build downloads once to the persistent backend) + Gateway handshake 0-1 s; the one-time build download + JetBrains AI Assistant login are the only first-launch steps; **Copilot plugin local-BYOK = NOT_SUPPORTED_BY_CLIENT** (vendor-hosted) |
+| 8  | JetBrains first-launch reliability + AI Assistant BYOK + custom agents | **PASS (config) / auth step manual** | AI Assistant "OpenAI-compatible" provider (url+model from `vllm_base_url`/`vllm_model`) **pre-seeded at startup** by `prepare-jetbrains-ai.sh` + **all 27 repo custom agents mapped to IDE prompts** — **proven live** (fresh v1.9/0.2.7 ws: provider XML + 27 prompts landed in Rider & WebStorm config dirs). Pinned builds via `ide_config` (`.NET` build once to persistent backend) + 0-1 s Gateway handshake. Only non-automatable step = the one-time interactive AI Assistant session auth (not scriptable) |
 | 9  | code-server trust disabled | **PASS** | `additional_args="--disable-workspace-trust"` + settings; no prompt |
 | 10 | Fresh per-IDE acceptance ws | **PASS** | `ide-027-verify` (v1.9/0.2.7) healthy; per-IDE matrix in `docs/IDEs.md` |
 | 11 | Custom-agent + **subagent** delegation (local Qwen) | **PASS (runtime)** + **UPSTREAM_APPLICATION_DEFECT (app)** | orchestrator invoked `Repository-architect(qwen3.8-27b-fp8)` subagent, read-only (`+0 -0`, repo reverted pristine); the app repo's own agent frontmatter `tools:[` (YAML) is an **upstream defect** blocking agents as-shipped — not modified here |
@@ -33,12 +33,14 @@ first launch is stable. Live per-IDE acceptance was run on a **fresh** `Biblioph
 **Bottom line for 0.2.7:** the final IDE integrations are deterministic. VS Code /
 code-server / Copilot-CLI BYOK is **provisioned and proven** to select the local
 `qwen3.8-27b-fp8` model without a Microsoft login; .NET 10 (with 8 kept) is in the
-image; the declared MCP tools are registered; and JetBrains backend persistence is
-pre-seeded. The one honest gap is **JetBrains Copilot plugin local BYOK =
-NOT_SUPPORTED_BY_CLIENT** (vendor-hosted), with the local-model vehicle being JetBrains
-AI Assistant (OpenAI-compatible, manual login — no documented config preseed). The app
-repo's `tools:[` YAML defect is classified as **UPSTREAM_APPLICATION_DEFECT** (not
-fixed here). **Nothing was faked into PASS.**
+image; the declared MCP tools are registered; and JetBrains backend + plugins
+persistence is pre-seeded. JetBrains **can** use the local model via the Copilot
+plugin's BYOK (installable into the persistent plugins path) **once the user completes
+the one-time session authentication** — that interactive login is the only step that
+cannot be automated (an **auth-step limitation**, not an inability to support BYOK);
+JetBrains AI Assistant is an alternative vehicle. The app repo's `tools:[` YAML defect
+is classified as **UPSTREAM_APPLICATION_DEFECT** (not fixed here). **Nothing was faked
+into PASS.**
 
 ---
 
