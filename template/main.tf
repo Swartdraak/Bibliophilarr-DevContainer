@@ -438,6 +438,18 @@ module "jetbrains" {
   # builds (majorVersion 2026.2), fetched from data.services.jetbrains.com on
   # 2026-09-02. When ide_config is set, major_version/channel/release links
   # must stay at their defaults (not passed here, per the module's validation).
+  #
+  # Plugin handling (FIRST-LAUNCH, corrected 2026-09-04 after live testing):
+  # The Coder JetBrains module has NO plugin-install hook, so it does NOT
+  # force-install the GitHub Copilot plugin or JetBrains AI Assistant. This is
+  # deliberate (least privilege). Live first-launch on the pinned Rider
+  # 262.9437.287 (2026.2) showed the auto-installed GitHub Copilot plugin
+  # 1.8.2-243 CRASHED: NoClassDefFoundError com/intellij/openapi/vcs/
+  # ProjectLevelVcsManager (a plugin-vs-IDE-build compatibility defect, not
+  # caused by this template). Forcing a known-incompatible plugin into the
+  # pinned build would break first launch, so we intentionally do NOT pre-install
+  # it. The proven in-workspace local-model + custom-agent surface is VS Code /
+  # code-server / Copilot CLI (see scripts/apply-ide-byok.sh + register-copilot-mcp.sh).
   ide_config = {
     RD = { build = "262.9437.287", name = "Rider", icon = "/icon/rider.svg" }
     WS = { build = "262.9437.145", name = "WebStorm", icon = "/icon/webstorm.svg" }

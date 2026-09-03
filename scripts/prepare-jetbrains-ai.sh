@@ -1,31 +1,29 @@
 #!/usr/bin/env bash
-# prepare-jetbrains-ai.sh — §2/#3 (JetBrains branch): pre-seed JetBrains AI Assistant.
+# prepare-jetbrains-ai.sh — §2/#3 (JetBrains branch): best-effort AI Assistant scaffold.
 #
-# Goal (task): configure the JetBrains AI chat capability to use the LLM provided by
-# the template variables (vllm_base_url / vllm_model) AND make the repo's custom agents
-# (Swartdraak/Bibliophilarr .github/agents/*.agent.md) available, in Rider/WebStorm.
+# IMPORTANT (honest capability, corrected 2026-09-04 after live first-launch testing):
+#   * JetBrains **AI Assistant** is a **commercial plugin that is NOT installed by the
+#     Coder JetBrains module** and requires a **JetBrains AI subscription** to
+#     authenticate. It is therefore **NOT a guaranteed in-box local-model vehicle**.
+#   * JetBrains provides **no documented, stable config-file preseed** for AI Assistant
+#     providers/custom prompts, and the session authentication is interactive.
+#   => This script is a **best-effort scaffold only**: it writes the provider
+#     (base URL + model from Coder params) + maps repo custom agents to prompt files so
+#     that IF the user installs+licenses+authenticates AI Assistant, the config is
+#     already in the persistent dir. By itself it does NOT make the IDE have local AI.
+#   The PROVEN local-model + custom-agent paths are **VS Code / code-server / Copilot
+#     CLI** (see apply-ide-byok.sh + register-copilot-mcp.sh + the Copilot CLI), which ARE
+#     wired and proven to select qwen3.8-27b-fp8 without a Microsoft login.
 #
-# Mechanism (documented, deterministic):
-#   * The JetBrains AI Assistant is the app's local-model vehicle, and it supports an
-#     "OpenAI-compatible" provider (Settings | AI Assistant | Providers & API keys).
-#     We write that provider config (base URL + model) into the PERSISTENT per-product
-#     config dir so the IDE loads it on first launch — no hardcoded IP/model. Values
-#     come from the Coder parameters (LOCAL_LLM_BASE_URL / LOCAL_LLM_MODEL).
-#   * The API key is OPTIONAL/keyless for the local vLLM endpoint. If a key is supplied
-#     via LOCAL_LLM_API_KEY, it is written to config (not the app key-store binary); the
-#     user may also complete the one-time provider authentication in the GUI.
-#   * The repo's custom agents are mapped to JetBrains "custom prompts" so the same
-#     orchestrator/architect roles designed in the repo are usable in the IDE chat.
+# What this scaffold still does (deterministic, least-privilege, non-fatal):
+#   * Writes the OpenAI-compatible provider (vllm_base_url / vllm_model) into the
+#     persistent per-product config dirs — no hardcoded IP/model.
+#   * Maps the repo's .github/agents/*.agent.md to per-product prompt files.
+#   * NEVER modifies the app repo (agents are READ-only) and writes no secret unless
+#     the operator supplies LOCAL_LLM_API_KEY.
 #
-# Honest limitation (kept explicit, NOT faked): JetBrains has NO documented, stable
-# config-file format for AI Assistant providers/custom prompts, and the app still
-# requires the interactive session authentication that cannot be scripted. So this
-# pre-seed is the DETERMINISTIC BEST-EFFORT scaffold; whether the running build accepts
-# it is verified live and classified accordingly. It NEVER modifies the app repo (the
-# agents are only READ) and does not write a secret unless the operator provides one.
-#
-# Idempotent + safe. Does not block startup (worst case: IDE ignores the scaffold and
-# the user completes the provider in the GUI).
+# Idempotent + safe. Does not block startup (worst case: the IDE simply doesn't have
+# AI Assistant installed/licensed, and the scaffold is inert).
 set -euo pipefail
 # media-common is a sourced runtime function library (not necessarily in the repo tree).
 # shellcheck source=/dev/null
@@ -122,4 +120,7 @@ if [[ "$(id -u)" -eq 1000 ]]; then
 fi
 
 echo "prepare-jetbrains-ai: DONE (provider scaffold x2 products; ${agent_count} repo custom agents mapped to prompts)"
-echo "prepare-jetbrains-ai: NOTE: interactive AI Assistant session auth remains a manual GUI step (not scriptable); scaffold is best-effort and verified live."
+echo "prepare-jetbrains-ai: NOTE: this is a BEST-EFFORT scaffold only. JetBrains AI Assistant is a commercial"
+echo "  plugin (NOT installed by the Coder module) needing an AI subscription + interactive auth; JetBrains"
+echo "  ships no documented config preseed. If the IDE does not have AI Assistant installed/licensed, this"
+echo "  scaffold is inert. The PROVEN local-model + custom-agent surface is VS Code / code-server / Copilot CLI."
