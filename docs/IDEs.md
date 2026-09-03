@@ -134,5 +134,20 @@ Behavior (least privilege, deterministic):
   privilege.)
 - **Leaves the repo pristine** (the agent is read-only unless the task edits).
 
-Verified on 0.2.8: `assign-task` reaches the local model, executes the task, and
-the app repo is clean afterwards (0 dirt).
+### Keep prompts BOUNDED (local 27B loop-guard)
+The local `qwen3.8-27b-fp8` is good for **single, scoped tasks** but weak at long
+agentic loops. Live-observed: a repo-wide-crawl prompt (`"Summarize what each
+subagent owns and how they map to the app"`) worked through the initial recon and
+then **got stuck repeating `Read` on non-existent paths** (`.../Notifications/
+Bibliophilarr`, `.../Notifications/Exclusions`) — burning turns without converging.
+That is a **model-quality limit, not an `assign-task` defect**.
+
+Mitigations built into `assign-task` (0.2.9):
+- **`--max-turns N`** (default 24, `ASSIGN_TASK_MAX_TURNS`) caps the agentic loop
+  so a weak model cannot spin forever; the wall-clock timeout (default 900s,
+  `ASSIGN_TASK_TIMEOUT_SECS`) is a second safety net.
+- **Scope the prompt** to one concrete deliverable (e.g. `"List the .cs files in
+  src/NzbDrone.Core/Books and their namespaces"`) rather than "map the whole app".
+
+Verified on 0.2.8/0.2.9: `assign-task` reaches the local model, executes a bounded
+task, and the app repo is clean afterwards (0 dirt).
