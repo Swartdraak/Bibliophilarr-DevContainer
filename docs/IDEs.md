@@ -39,8 +39,9 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
 | --- | --- | --- |
 | Workspace/Connection | PASS | Gateway `Rider://` connection, 0-1 s handshake; pinned build `262.9437.287` (§8) |
 | Persistent backend | PASS | `~/.config|share|cache/JetBrains/Rider` present, owned **1000:1000**, via `Rider_*_path` env (§6/#8) |
-| Copilot plugin local BYOK | NOT_SUPPORTED_BY_CLIENT | vendor-hosted GitHub-account; cannot point at local endpoint; no preseed supported |
-| Local-model BYOK | NOT_SUPPORTED_BY_CLIENT | local vehicle is **JetBrains AI Assistant** (OpenAI-compatible); **no documented config-file preseed** → manual at first login |
+| Copilot plugin install | PASS (installable) | plugin **can** be installed into the persistent `Rider_*_plugins_path` (Toolbox/Coder `ide_config` preselect); the workspace does not force-install (least privilege) |
+| Copilot plugin local BYOK | **PASS (after user auth)** | once the user authenticates the Copilot session (one-time GitHub/OAuth login), BYOK lets it target the local OpenAI-compatible endpoint; **the login is the only gating step** and cannot be scripted |
+| Local-model fallback | manual | **JetBrains AI Assistant** (OpenAI-compatible) is an alternative vehicle; **no documented config-file preseed** |
 | MCP (JetBrains) | NOT-TESTED (manual) | JetBrains MCP config is per-install, manual; not force-installed (least privilege) |
 | First-launch churn | PASS_WITH_LIMITATIONS | transport reconnect is normal; one-time `.NET` build is **deterministic** via `ide_config` pin (§8) |
 
@@ -49,8 +50,9 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
 | --- | --- | --- |
 | Workspace/Connection | PASS | Gateway `WebStorm://`, pinned build `262.9437.145` (§8) |
 | Persistent backend | PASS | `~/.config|share|cache/JetBrains/WebStorm` present, owned 1000:1000, via `WebStorm_*_path` env (§6/#8) |
-| Copilot plugin local BYOK | NOT_SUPPORTED_BY_CLIENT | same as Rider (vendor-hosted) |
-| Local-model BYOK | NOT_SUPPORTED_BY_CLIENT | AI Assistant OpenAI-compatible, manual (no documented preseed) |
+| Copilot plugin install | PASS (installable) | same as Rider — installable into persistent `WebStorm_*_plugins_path`; not force-installed (least privilege) |
+| Copilot plugin local BYOK | **PASS (after user auth)** | same as Rider — BYOK targets the local endpoint once the user authenticates (one-time login, not scriptable) |
+| Local-model fallback | manual | AI Assistant OpenAI-compatible (no documented preseed) |
 | MCP (JetBrains) | NOT-TESTED (manual) | same as Rider |
 
 ## BYOK separation (the core remediation)
@@ -59,13 +61,17 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
   `scripts/apply-ide-byok.sh` (writes `chatLanguageModels.json` from Coder params) and
   `COPILOT_PROVIDER_*` env, so the local `qwen3.8-27b-fp8` model is selected **without
   a Microsoft GitHub login**.
-* **JetBrains (Rider/WebStorm)** — the **Copilot plugin is GitHub-hosted and
-  vendor-controlled; it cannot be pointed at a local endpoint**, so JetBrains Copilot
-  local BYOK is **NOT_SUPPORTED_BY_CLIENT**. The local-model vehicle is **JetBrains AI
-  Assistant** (OpenAI-compatible); because JetBrains ships **no documented config-file
-  preseed**, its credential is **manual at first login** on a shared connection — the
-  workspace pre-seeds only the **persistent backend directories** (not secrets) so the
-  first launch is stable.
+* **JetBrains (Rider/WebStorm)** — the Copilot plugin **can be installed** into the
+  persistent `Rider_*_plugins_path` / `WebStorm_*_plugins_path` (Toolbox / Coder
+  `ide_config` preselect). Once the user **authenticates the Copilot session**
+  (one-time GitHub/OAuth login), **Copilot BYOK can point at the local
+  OpenAI-compatible endpoint**, so JetBrains *can* use the local `qwen3.8-27b-fp8`
+  model. The **only gating step is that login**, and it **cannot be scripted** — so the
+  workspace pre-seeds the **persistent backend + plugins directories** (not secrets)
+  and the BYOK endpoint, leaving the user to complete the one-time auth. **JetBrains AI
+  Assistant** (OpenAI-compatible, also manual login) is an alternative vehicle. Neither
+  JetBrains path can be *fully* headless-automated because of the mandatory interactive
+  login — this is an **auth-step limitation**, not an inability to support BYOK.
 
 ## §11 custom-agent / subagent + local-model proof
 
