@@ -1,0 +1,110 @@
+#!/usr/bin/env bash
+# assign-task — submit a task to a Bibliophilarr custom agent and have it execute,
+# IN THE WORKSPACE, WITHOUT OPENING AN IDE. This is the headless agent-runtime path:
+#   Coder workspace agent + Copilot CLI + local BYOK model (qwen3.8-27b-fp8) +
+#   the repo's MCP tools (register-copilot-mcp.sh) + the app's custom agents.
+#
+# Usage:
+#   assign-task "Open a PR that fixes X"                 # read-only; local model
+#   assign-task --github "Create a PR for X in the app"  # allow GitHub writes
+#   assign-task --agent repository-architect "..."       # target a named subagent
+#   assign-task --agent bibliophilarr-orchestrator "..." # (orchestrator is default)
+#
+# Behavior:
+#   * Runs `copilot --agent <agent> -p "<task>"` against the LOCAL BYOK model
+#     (COPILOT_PROVIDER_* / COPILOT_OFFLINE from the agent env). The model is the
+#     local vLLM `qwen3.8-27b-fp8`, NOT GitHub — even with --github, GitHub is used
+#     only for repo/auth, the model stays local.
+#   * READ-ONLY BY DEFAULT: the GitHub classic-PAT (GITHUB_TOKEN) is UNSET unless
+#     --github is given, so a task cannot make GitHub writes by accident. With
+#     --github, the injected GITHUB_TOKEN is left in place for PRs/issues.
+#   * The app's .github/agents/*.agent.md frontmatter ships a known upstream YAML
+#     defect (`tools:[` with no space) that blocks Copilot from loading them. This
+#     applies a TRANSIENT in-place fix and REVERTS it (via trap) so the app repo is
+#     left pristine. This is the documented workaround; the proper fix belongs in
+#     the app repo (out of scope for this platform — least privilege).
+#   * Leaves the app repo pristine (agent is read-only unless the task itself edits;
+#     this helper never edits).
+set -euo pipefail
+
+AGENT="bibliophilarr-orchestrator"
+ALLOW_GH=0
+TASK=""
+REPO_DIR="${BIBLIOPHILARR_REPOSITORY_DIR:-/workspaces/Bibliophilarr}"
+TIMEOUT_SECS="${ASSIGN_TASK_TIMEOUT_SECS:-1500}"
+
+usage() {
+  cat >&2 <<'H'
+Usage: assign-task [--github] [--agent NAME] "<task prompt>"
+  --github          allow GitHub writes (uses injected GITHUB_TOKEN). Default: read-only.
+  --agent NAME      target agent (default: bibliophilarr-orchestrator, which delegates
+                    to the app's subagents as designed).
+  "<task prompt>"   what the agent should do (work in /workspaces/Bibliophilarr).
+H
+}
+
+# Parse args
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --github) ALLOW_GH=1; shift ;;
+    --agent) AGENT="${2:?--agent needs a value}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    -*) echo "unknown flag: $1 (see --help)" >&2; usage; exit 2 ;;
+    *) TASK="$1"; shift ;;
+  esac
+done
+[[ -n ${TASK} ]] || { usage; exit 2; }
+command -v copilot >/dev/null 2>&1 || { echo "assign-task: copilot CLI not found (is the agent connected?)" >&2; exit 3; }
+
+# Locate the agent files (only for the transient YAML fix). Find the two roles the
+# orchestrator delegates to AND the orchestrator itself; fix any *.agent.md under .github/agents.
+AGDIRS=()
+for d in "${REPO_DIR}/.github/agents" "${REPO_DIR}/.github/agents/agents"; do
+  [[ -d ${d} ]] && AGDIRS+=("$d")
+done
+
+# Back up + fix the upstream `tools:[` YAML defect so the agents load; revert on EXIT.
+FIXED=()
+# shellcheck disable=SC2317  # invoked by the EXIT trap below; shellcheck can't see across trap
+restore_yaml() {
+  local f
+  for f in ${FIXED[@]+"${FIXED[@]}"}; do
+    if [[ -f ${f}.orig ]]; then mv -f "${f}.orig" "$f"; fi
+    rm -f "${f}.orig"
+  done
+}
+trap restore_yaml EXIT
+
+for d in ${AGDIRS[@]+"${AGDIRS[@]}"}; do
+  for f in "$d"/*.agent.md; do
+    [[ -f ${f} ]] || continue
+    if grep -qE '^tools:\[' "$f" 2>/dev/null; then
+      cp -f "$f" "${f}.orig"
+      sed -i 's/^tools:\[/tools: [/' "$f"
+      FIXED+=("$f")
+    fi
+  done
+done
+
+GHLABEL="no(restricted)"
+[[ ${ALLOW_GH} -eq 1 ]] && GHLABEL="yes"
+echo "assign-task: agent=${AGENT} github=${GHLABEL} fixed_yaml_files=${#FIXED[@]} timeout=${TIMEOUT_SECS}s"
+echo "assign-task: model=local(vLLM qwen3.8-27b-fp8) repo=${REPO_DIR}"
+
+# Run the agent on the LOCAL model. Unset GitHub tokens unless --github (read-only default).
+run() {
+  if [[ ${ALLOW_GH} -eq 1 ]]; then
+    echo "assign-task: GitHub AUTH ALLOWED (--github); using injected GITHUB_TOKEN for repo writes"
+    env timeout "${TIMEOUT_SECS}" copilot --add-dir "${REPO_DIR}" --agent "${AGENT}" -p "${TASK}"
+  else
+    echo "assign-task: READ-ONLY (GITHUB_TOKEN unset for this run; local model only)"
+    env -u GITHUB_TOKEN -u GH_TOKEN -u GH_PAT timeout "${TIMEOUT_SECS}" copilot --add-dir "${REPO_DIR}" --agent "${AGENT}" -p "${TASK}"
+  fi
+}
+rc=0
+run || rc=$?
+
+echo ""
+echo "assign-task: copilot exit=${rc}"
+echo "assign-task: repo dirt after run: $(git -C "${REPO_DIR}" status --porcelain 2>/dev/null | wc -l) files (0 = pristine)"
+exit ${rc}

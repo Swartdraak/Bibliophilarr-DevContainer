@@ -105,3 +105,34 @@ This platform does **not** modify the app repo; the delegation runtime is proven
 transient, reverted in-place fix. (The `GITHUB_TOKEN` Coder injects is a classic
 `gho_`/`ghp_` PAT that Copilot's *GitHub features* reject for *auth*, but — as proven —
 the **local BYOK model path does not require GitHub auth** at all.)
+
+## Headless agent dispatch (no IDE) — `assign-task` (0.2.8)
+
+You can submit a task to the orchestrator (or any named subagent) and have it
+**execute in the workspace without opening an IDE**. This reuses the same proven
+runtime — Coder workspace agent + Copilot CLI + the local BYOK model
+(`qwen3.8-27b-fp8`) + the repo's MCP tools + the app's custom agents — just driven
+command-line instead of through a GUI.
+
+```
+coder ssh <workspace>            # or from the Coder host / coder ssh
+assign-task "Summarize what each subagent owns and how they map to the app"   # read-only
+assign-task --github "Open a draft PR documenting the agent map"              # allows GitHub writes
+assign-task --agent repository-architect "..."                                # target a specific subagent
+```
+
+Behavior (least privilege, deterministic):
+- **The model is always the local vLLM** `qwen3.8-27b-fp8` (`COPILOT_PROVIDER_*`
+  from the Coder params). Even with `--github`, GitHub is used only for
+  repo/auth — the model stays local.
+- **Read-only by default**: `GITHUB_TOKEN` is *unset* for the run unless `--github`
+  is given, so a task cannot make GitHub writes by accident.
+- **Transient YAML workaround**: the app's `.github/agents/*.agent.md` frontmatter
+  ships a `tools:[` (no-space) defect that blocks Copilot from loading them as
+  shipped; `assign-task` fixes it in place and **reverts it** (trap) so the app
+  repo is left pristine. (Out of scope for this platform to modify the app — least
+  privilege.)
+- **Leaves the repo pristine** (the agent is read-only unless the task edits).
+
+Verified on 0.2.8: `assign-task` reaches the local model, executes the task, and
+the app repo is clean afterwards (0 dirt).

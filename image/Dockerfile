@@ -105,7 +105,12 @@ COPY scripts/ /opt/workspace/bin/
 COPY image/scripts/ /opt/workspace/bin/
 COPY workspace/bin/ /opt/workspace/bin/
 RUN chmod 0755 /opt/workspace/bin/* && ln -s /opt/workspace/bin/* /usr/local/bin/
-ENV WORKSPACE_IMAGE_VERSION=0.2.7
+# 0.2.8 (§4 + §12 headless): assign-task helper (submit a task to the orchestrator
+# agent without opening an IDE, read-only by default, --github for writes, auto
+# YAML workaround + trap-revert) and a startup-script NuGet ownership pre-step
+# (fixes Rider restore "Permission denied" on the root-owned /home/coder/.nuget/packages
+# named volume).
+ENV WORKSPACE_IMAGE_VERSION=0.2.8
 USER coder
 WORKDIR /workspaces
 # Coder agent pattern (root cause of "agent never connects", proven 2026-09-02):
