@@ -41,7 +41,7 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
 | Persistent backend | PASS | `~/.config|share|cache/JetBrains/Rider` present, owned **1000:1000**, via `Rider_*_path` env (§6/#8) |
 | Copilot plugin install | PASS (installable) | plugin **can** be installed into the persistent `Rider_*_plugins_path` (Toolbox/Coder `ide_config` preselect); the workspace does not force-install (least privilege) |
 | Copilot plugin local BYOK | **PASS (after user auth)** | once the user authenticates the Copilot session (one-time GitHub/OAuth login), BYOK lets it target the local OpenAI-compatible endpoint; **the login is the only gating step** and cannot be scripted |
-| Local-model fallback | manual | **JetBrains AI Assistant** (OpenAI-compatible) is an alternative vehicle; **no documented config-file preseed** |
+| **AI Assistant BYOK (local LLM)** | **PASS (config) / auth step manual** | `prepare-jetbrains-ai.sh` pre-seeds the "OpenAI-compatible" provider (url+model from `vllm_base_url`/`vllm_model`) + maps **all 27** repo agents to prompts; **proven live** in-ws. First chat needs the one-time interactive AI Assistant auth (not scriptable) |
 | MCP (JetBrains) | NOT-TESTED (manual) | JetBrains MCP config is per-install, manual; not force-installed (least privilege) |
 | First-launch churn | PASS_WITH_LIMITATIONS | transport reconnect is normal; one-time `.NET` build is **deterministic** via `ide_config` pin (§8) |
 
@@ -52,7 +52,7 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
 | Persistent backend | PASS | `~/.config|share|cache/JetBrains/WebStorm` present, owned 1000:1000, via `WebStorm_*_path` env (§6/#8) |
 | Copilot plugin install | PASS (installable) | same as Rider — installable into persistent `WebStorm_*_plugins_path`; not force-installed (least privilege) |
 | Copilot plugin local BYOK | **PASS (after user auth)** | same as Rider — BYOK targets the local endpoint once the user authenticates (one-time login, not scriptable) |
-| Local-model fallback | manual | AI Assistant OpenAI-compatible (no documented preseed) |
+| **AI Assistant BYOK (local LLM)** | **PASS (config) / auth step manual** | same as Rider — provider (url+model from `vllm_base_url`/`vllm_model`) + **all 27** repo agents mapped to prompts; **proven live** in-ws |
 | MCP (JetBrains) | NOT-TESTED (manual) | same as Rider |
 
 ## BYOK separation (the core remediation)
@@ -66,12 +66,24 @@ NOT_SUPPORTED_BY_CLIENT / UPSTREAM_APPLICATION_DEFECT.
   `ide_config` preselect). Once the user **authenticates the Copilot session**
   (one-time GitHub/OAuth login), **Copilot BYOK can point at the local
   OpenAI-compatible endpoint**, so JetBrains *can* use the local `qwen3.8-27b-fp8`
-  model. The **only gating step is that login**, and it **cannot be scripted** — so the
-  workspace pre-seeds the **persistent backend + plugins directories** (not secrets)
-  and the BYOK endpoint, leaving the user to complete the one-time auth. **JetBrains AI
-  Assistant** (OpenAI-compatible, also manual login) is an alternative vehicle. Neither
-  JetBrains path can be *fully* headless-automated because of the mandatory interactive
-  login — this is an **auth-step limitation**, not an inability to support BYOK.
+  model. **JetBrains AI Assistant** (OpenAI-compatible) is the local-model vehicle, and
+  it is now **deterministically pre-seeded** at startup by `scripts/prepare-jetbrains-ai.sh`:
+  - the **AI Assistant "OpenAI-compatible" provider** is written into the persistent
+    `Rider`/`WebStorm` config dirs using the template variables `vllm_base_url`
+    (`LOCAL_LLM_BASE_URL`) and `vllm_model` (`LOCAL_LLM_MODEL`) — no hardcoded IP/model;
+    the API key is optional/keyless for the local endpoint.
+  - **the repository's custom agents** (`.github/agents/*.agent.md`) are mapped to
+    **JetBrains custom prompts** (one per agent, tagged with `vllm_model`), so the
+    orchestrator / repository-architect / QA / release / governance roles designed in the
+    repo are usable in the IDE chat. **Proven live** on a fresh v1.9/0.2.7 workspace:
+    the provider XML (url + `qwen3.8-27b-fp8` model) and **all 27** agent prompts landed
+    in both products' config dirs at startup.
+  - The **one non-automatable step** remains the interactive **AI Assistant session
+    authentication** (a JetBrains-required login) — so "configuration" is PASS (proven),
+    while "first chat" still needs the user's one-time login. This is an **auth-step
+    limitation, not an inability to support BYOK**. (JetBrains ships no documented,
+    stable provider/prompt config-file schema, so the preseed is a deterministic
+    best-effort scaffold; the running build is verified to load the layout.)
 
 ## §11 custom-agent / subagent + local-model proof
 

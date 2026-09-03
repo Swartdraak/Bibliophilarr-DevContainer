@@ -46,6 +46,10 @@ if [[ ${LOCAL_LLM_PROVIDER:-none} == vllm ]]; then verify-local-llm --quick || e
 # §8 deterministic JetBrains remote-backend layout (persistent dirs on the home
 # volume; prevents re-download/reinstall churn on first connect + reconnect).
 /opt/workspace/bin/prepare-jetbrains-backend.sh || echo "WARNING: jetbrains backend prepare reported an issue (non-fatal)"
+# §2/#3 (JetBrains branch): pre-seed the AI Assistant OpenAI-compatible provider
+# (base url + model from the Coder params) + map the repo custom agents to IDE
+# prompts, for Rider/WebStorm. Best-effort, live-verified; does not block startup.
+/opt/workspace/bin/prepare-jetbrains-ai.sh || echo "WARNING: jetbrains AI assistant preseed reported an issue (non-fatal)"
 /opt/workspace/bin/verify-workspace.sh "$repo_dir"
 # verify-agent-runtime checks repository CONTENT (.github/agents, skills,
 # instructions). Those are a runtime convenience, not a workspace-correctness
