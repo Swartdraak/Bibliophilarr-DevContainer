@@ -443,25 +443,34 @@ module "jetbrains" {
   options = toset(["RD", "WS"])
   default = toset(["RD", "WS"])
   tooltip = "Open Bibliophilarr in Rider or WebStorm via JetBrains Toolbox"
-  # Non-null: fixes the 1.4.0 ide_config null-validation plan bug and makes
-  # plan deterministic (skips the live JetBrains API). Real latest stable
-  # builds (majorVersion 2026.2), fetched from data.services.jetbrains.com on
-  # 2026-09-02. When ide_config is set, major_version/channel/release links
-  # must stay at their defaults (not passed here, per the module's validation).
+  # ide_config = null (DYNAMIC LATEST-STABLE) — corrected 2026-09-04 after
+  # re-investigating the historical "length(null) / argument must not be null"
+  # plan error. That error came from a STALE/OLDER cached module revision, NOT
+  # from current v1.4.0. The current cached .terraform/modules/jetbrains (v1.4.0)
+  # is explicitly null-safe: its validation is `var.ide_config == null ||
+  # length(var.ide_config) > 0` and its HTTP data source is
+  # `for_each = var.ide_config == null ? local.selected_ides : toset([])`.
+  # A live `terraform validate` + `terraform plan` with ide_config omitted
+  # (null) SUCCEEDS (rc=0) and resolves latest-stable builds from the JetBrains
+  # releases API at plan time (observed: RD -> 262.9437.287, WS -> 262.10315.144).
   #
-  # Plugin handling (FIRST-LAUNCH, corrected 2026-09-04 after live testing):
-  # The Coder JetBrains module has NO plugin-install hook, so it does NOT
-  # force-install the GitHub Copilot plugin or JetBrains AI Assistant. This is
-  # deliberate (least privilege). Live first-launch on the pinned Rider
-  # 262.9437.287 (2026.2) showed the auto-installed GitHub Copilot plugin
-  # 1.8.2-243 CRASHED: NoClassDefFoundError com/intellij/openapi/vcs/
-  # ProjectLevelVcsManager (a plugin-vs-IDE-build compatibility defect, not
-  # caused by this template). Forcing a known-incompatible plugin into the
-  # pinned build would break first launch, so we intentionally do NOT pre-install
-  # it. The proven in-workspace local-model + custom-agent surface is VS Code /
+  # Version policy: do NOT pin exact patch builds (this is the deliberate
+  # reproducibility choice). Omit ide_config -> module uses its defaults
+  # channel=release / major_version=latest -> Rider + WebStorm track current
+  # stable. Pin exact ide_config build numbers ONLY for air-gapped deployments or
+  # a known-good compatibility pin — and document why when doing so.
+  #
+  # Trade-off accepted: plan now performs live HTTP to data.services.jetbrains.com
+  # (not deterministic at plan time). This is the module's intended behavior in
+  # null mode; major_version/channel/releases_base_link stay at module defaults
+  # (latest/release/https://data.services.jetbrains.com).
+  #
+  # Plugin handling (unchanged, least privilege): the Coder JetBrains module has
+  # NO plugin-install hook, so it does NOT force-install the GitHub Copilot plugin
+  # or JetBrains AI Assistant. Live first-launch on Rider 2026.2 showed a known
+  # Copilot-plugin-vs-IDE-build incompatibility (NoClassDefFoundError
+  # com/intellij/openapi/vcs/ProjectLevelVcsManager), a plugin/IDE defect not caused
+  # by this template; force-installing it would break first launch, so we do not.
+  # The proven in-workspace local-model + custom-agent surface is VS Code /
   # code-server / Copilot CLI (see scripts/apply-ide-byok.sh + register-copilot-mcp.sh).
-  ide_config = {
-    RD = { build = "262.9437.287", name = "Rider", icon = "/icon/rider.svg" }
-    WS = { build = "262.9437.145", name = "WebStorm", icon = "/icon/webstorm.svg" }
-  }
 }
