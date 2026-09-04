@@ -443,11 +443,25 @@ module "jetbrains" {
   options = toset(["RD", "WS"])
   default = toset(["RD", "WS"])
   tooltip = "Open Bibliophilarr in Rider or WebStorm via JetBrains Toolbox"
-  # Non-null: fixes the 1.4.0 ide_config null-validation plan bug and makes
-  # plan deterministic (skips the live JetBrains API). Real latest stable
-  # builds (majorVersion 2026.2), fetched from data.services.jetbrains.com on
-  # 2026-09-02. When ide_config is set, major_version/channel/release links
-  # must stay at their defaults (not passed here, per the module's validation).
+  # Non-null (PINNED) — and it MUST stay non-null; do NOT switch to
+  # ide_config = null (dynamic latest-stable). Root cause of the historical
+  # "length(null) / Invalid value for 'value' parameter: argument must not be
+  # null" plan error (re-investigated 2026-09-04): the jetbrains module's own
+  # validation line
+  #     condition = var.ide_config == null || length(var.ide_config) > 0
+  # is NOT safe on the Terraform this repo's CI actually pins (1.9.8): older
+  # Terraform evaluates length(null) before the || can short-circuit, so null
+  # fails validate/plan. On newer Terraform (1.10+/1.16 local) it short-circuits
+  # and SUCCEEDS (observed RD->262.9437.287, WS->262.10315.144), which MASKS
+  # the module bug when testing locally. It is a module-side validation bug, not
+  # a template bug; we do not modify/upgrade the module (1.4.0 is latest) per
+  # policy, so we pin exact build numbers instead and refresh them to current
+  # latest-stable when a new stable ships (that IS the no-exact-REPRO-pin policy:
+  # track latest stable, don't freeze an old patch indefinitely).
+  # Real latest stable builds (majorVersion 2026.2), fetched from
+  # data.services.jetbrains.com on 2026-09-02. When ide_config is set,
+  # major_version/channel/release links must stay at their defaults (not passed
+  # here, per the module's validation).
   #
   # Plugin handling (FIRST-LAUNCH, corrected 2026-09-04 after live testing):
   # The Coder JetBrains module has NO plugin-install hook, so it does NOT
