@@ -10,6 +10,8 @@
 
 Monthly maintenance covers CVEs and tool updates; critical CVEs trigger a new image. Changes to application manifests, build/test/compose scripts, test stack, or agent/MCP requirements trigger compatibility review.
 
+Changes to CoderOps canonical agents, skills, instructions, schemas, or MCP tools must also regenerate the adapter surfaces via `coderops/scripts/generate-adapters.sh` and re-run the CoderOps package tests.
+
 ## Cache reset and CI
 
 Stop the workspace and remove only its named NuGet/Yarn volumes; never delete the home worktree as a cache operation. Container layers stay in the disposable sidecar. CI runs Terraform format/validate, ShellCheck, JSON and checkout tests, image build/self-test, SBOM, and scan. Protected integration CI exercises disposable Coder lifecycle. Devcontainer syntax checks are lightweight per-PR; full build/test is scheduled/manual.

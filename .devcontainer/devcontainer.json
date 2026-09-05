@@ -1,6 +1,6 @@
 {
   "name": "Bibliophilarr Agentic Workspace",
-  "image": "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.7",
+  "image": "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.9",
   "remoteUser": "coder",
   "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
   "mounts": [

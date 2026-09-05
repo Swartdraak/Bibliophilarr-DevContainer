@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-verification-result.schema.json",
+  "title": "CoderOps Verification Result",
+  "type": "object",
+  "required": ["target", "status", "checkedAt"],
+  "properties": { "status": { "enum": ["pass", "fail", "blocked", "unknown"] } }
+}

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-template-drift.schema.json",
+  "title": "CoderOps Template Drift Report",
+  "type": "object",
+  "required": ["generated_at", "status"],
+  "properties": { "status": { "enum": ["synced", "drifted", "unknown"] } }
+}

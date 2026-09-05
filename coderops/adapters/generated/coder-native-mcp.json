@@ -1,0 +1,4 @@
+{
+  "command": "coder",
+  "args": ["exp", "mcp", "server"]
+}

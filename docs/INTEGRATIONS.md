@@ -39,3 +39,5 @@ The actual Bibliophilarr MCP packages could not be discovered. Do not substitute
 ## GitHub and agent discovery
 
 Use Coder GitHub external auth or a least-scoped GitHub App; never embed a PAT, scrape credential helpers, or log OAuth material. Branch protection and human merge remain authoritative. After a live clone, inventory repository agent/skill/instruction paths and confirm each client discovers them. The required orchestrator→repository-architect smoke test was **BLOCKED** because the repository and runtime were inaccessible; it must be delegated, not answered manually.
+
+CoderOps extends this model with canonical agents, skills, and a custom MCP server. The generated adapter surfaces are synchronized from `coderops/` so the repo keeps one canonical policy source and multiple client-facing views.

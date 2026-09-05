@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-change-result.schema.json",
+  "title": "CoderOps Change Result",
+  "type": "object",
+  "required": ["planId", "status", "started_at", "finished_at"],
+  "properties": { "status": { "enum": ["applied", "failed", "rolled_back"] } }
+}

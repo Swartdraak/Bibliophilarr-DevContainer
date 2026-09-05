@@ -83,11 +83,11 @@ data "coder_parameter" "inference_provider" {
 # template, the requested image, the running container, WORKSPACE_IMAGE_VERSION and
 # toolchain.json all identify the SAME artifact. A plain Terraform variable was being
 # resolved to a stale memoized host value, so it is intentionally NOT used for the
-# container image. 0.2.7 is the final clean image built from image/Dockerfile.
+# container image. 0.2.9 is the current committed image built from image/Dockerfile.
 data "coder_parameter" "workspace_image" {
   name         = "workspace_image"
   display_name = "Workspace image"
-  default      = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.7"
+  default      = "ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.9"
   mutable      = true
   order        = 0
 }
@@ -476,6 +476,6 @@ module "jetbrains" {
   # code-server / Copilot CLI (see scripts/apply-ide-byok.sh + register-copilot-mcp.sh).
   ide_config = {
     RD = { build = "262.9437.287", name = "Rider", icon = "/icon/rider.svg" }
-    WS = { build = "262.9437.145", name = "WebStorm", icon = "/icon/webstorm.svg" }
+    WS = { build = "262.10315.144", name = "WebStorm", icon = "/icon/webstorm.svg" }
   }
 }

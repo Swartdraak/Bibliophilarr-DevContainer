@@ -30,3 +30,5 @@ configuration. That is unacceptable for validator isolation when the user owns p
 Use a mode-aware external broker/workload identity or a separate least-privileged validator identity.
 Do not test secrets by printing value, length, prefix, helper output, or headers; test only whether the
 expected integration succeeds.
+
+CoderOps adds explicit risk classes R0-R4, observer/operator/administrator modes, and approval-gated change plans. Administrative tools must reject blind mutation requests and keep the audit log secret-safe.

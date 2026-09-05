@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-config.schema.json",
+  "title": "CoderOps Configuration",
+  "type": "object",
+  "required": ["schemaVersion", "coder", "mode", "repository"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "mode": { "enum": ["observer", "operator", "administrator"] },
+    "coder": { "type": "object" },
+    "repository": { "type": "object" }
+  }
+}

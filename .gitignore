@@ -21,3 +21,9 @@ fixtures/
 .vscode/
 .idea/
 .DS_Store
+
+# CoderOps Node package build artifacts and local state
+coderops/mcp/node_modules/
+coderops/mcp/dist/
+coderops/.state/
+coderops/.cache/

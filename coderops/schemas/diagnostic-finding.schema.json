@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-diagnostic-finding.schema.json",
+  "title": "CoderOps Diagnostic Finding",
+  "type": "object",
+  "required": ["id", "severity", "domain", "summary", "recommendedAction", "risk"],
+  "properties": { "id": { "type": "string" }, "severity": { "enum": ["info", "warning", "error", "critical"] } }
+}

@@ -2,6 +2,8 @@
 
 All clients target `/workspaces/Bibliophilarr` through the same Coder agent and image.
 
+CoderOps-generated adapter artifacts are available under `coderops/adapters/generated`, `.github/agents`, `.github/skills`, and `.agents/skills`. They provide the canonical operational layer for client integrations without changing the IDE-specific runtime contract.
+
 All clients target `/workspaces/Bibliophilarr` through the same Coder agent, image
 `0.2.7`, and OpenAI-compatible local-model endpoint (`http://192.168.100.102:8000/v1`,
 model `qwen3.8-27b-fp8`). Live per-IDE acceptance below was run on a **fresh**

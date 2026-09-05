@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-health.schema.json",
+  "title": "CoderOps Health Report",
+  "type": "object",
+  "required": ["overall", "sections"],
+  "properties": { "overall": { "enum": ["PASS", "DEGRADED", "FAIL"] } }
+}

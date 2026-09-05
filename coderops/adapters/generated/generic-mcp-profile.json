@@ -1,0 +1,5 @@
+{
+  "profiles": {
+    "bibliophilarr": ["filesystem", "git", "github", "memory", "sequential-thinking", "coder", "coderops"]
+  }
+}

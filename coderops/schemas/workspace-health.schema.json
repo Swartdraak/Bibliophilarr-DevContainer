@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-workspace-health.schema.json",
+  "title": "CoderOps Workspace Health Report",
+  "type": "object",
+  "required": ["repositoryRoot", "checkedOut", "repoDirty"],
+  "properties": { "checkedOut": { "type": "boolean" }, "repoDirty": { "type": "boolean" } }
+}

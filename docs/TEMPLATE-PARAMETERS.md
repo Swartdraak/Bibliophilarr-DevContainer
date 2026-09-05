@@ -21,7 +21,7 @@ Two distinct kinds of input exist:
 Listed in `order` (the order they appear in the Coder UI).
 
 ### 0. `workspace_image`
-- **Type:** string | **Default:** `ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.7` | **mutable:** yes | **order:** 0
+- **Type:** string | **Default:** `ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.9` | **mutable:** yes | **order:** 0
 - **What it does:** the exact, **immutable** Docker image the workspace container
   is created from. This is a first-class Coder parameter (not just a Terraform
   default) so that on each template push its default refreshes to match the
@@ -31,15 +31,13 @@ Listed in `order` (the order they appear in the Coder UI).
 - **Constraint:** validated to be a pinned tag or digest; `latest` is rejected
   (`"Pin an immutable version or digest, never latest."`).
 - **Notes / usage:**
-  - `0.2.7` = the baseline clean image (safe default).
-  - `0.2.8` = adds the headless `assign-task` helper + the Rider NuGet ownership
-    startup fix.
-  - `0.2.9` = adds the `assign-task` loop-guard (`--max-turns`), recommended for
-    headless agent runs on the local model.
-  - Select a newer image for a workspace with
+  - `0.2.9` = the current committed image built from `image/Dockerfile`, including
+    the `assign-task` loop-guard and final workspace reliability fixes.
+  - `0.2.7` remains a historical baseline, not the live default.
+  - Select a different image for a workspace with
     `coder create <ws> --parameter workspace_image=ghcr.io/swartdraak/bibliophilarr-agent-workspace:0.2.9`
-    (or the equivalent UI field). `main.tf` default stays at `0.2.7` as the safe
-    rollback baseline.
+    (or the equivalent UI field). The template default stays pinned to the current
+    image tag so new workspaces inherit the current runtime.
 - **Consumed by:** the `docker_container.workspace` `image` field.
 
 ### 1. `bibliophilarr_ref`

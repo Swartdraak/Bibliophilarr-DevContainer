@@ -1,0 +1,29 @@
+schemaVersion: 1
+
+coder:
+  urlFromEnv: CODER_URL
+  auth:
+    mode: existing-cli
+    tokenEnv: CODER_SESSION_TOKEN
+
+mode: observer
+
+repository:
+  root: /home/swartdraak/Repos/Bibliophilarr-DevContainer
+  templatePath: template
+
+bibliophilarr:
+  workspaceRepository: /workspaces/Bibliophilarr
+
+runtime:
+  type: auto
+
+policy:
+  allowR3: false
+  allowR4: false
+
+audit:
+  enabled: true
+
+mcp:
+  preferNativeCoder: true

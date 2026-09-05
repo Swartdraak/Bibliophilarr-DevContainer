@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bibliophilarr.local/schemas/coderops-inventory.schema.json",
+  "title": "CoderOps Inventory",
+  "type": "object",
+  "required": ["generated_at", "coder", "capabilities", "git"],
+  "properties": { "generated_at": { "type": "string" } }
+}

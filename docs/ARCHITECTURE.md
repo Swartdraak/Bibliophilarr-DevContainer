@@ -43,6 +43,8 @@ Docker socket. The devcontainer proposal pins the same image.
 5. **Secrets:** parameters carry identifiers and URLs only. Secret values arrive from Coder user
    secrets or a mode-scoped external secret broker. Validator mode receives no write/admin/release secret.
 
+6. **Operational control layer:** CoderOps under `coderops/` is the canonical policy and MCP/control plane layer. It discovers Coder, inspects state, detects drift, and generates adapters; it does not replace the Coder deployment or the workspace image.
+
 ## Source of truth
 
 | Concern | Authority |
@@ -59,6 +61,8 @@ Docker socket. The devcontainer proposal pins the same image.
 | Secrets | Coder/external secret manager |
 | vLLM endpoint/model | non-secret template parameter |
 | vLLM API key | secret manager |
+| CoderOps policy/schemas/agents | `coderops/` canonical sources |
+| CoderOps generated adapters | `coderops/adapters/generated`, `.github/agents`, `.github/skills`, `.agents/skills` |
 
 ## Network boundaries
 

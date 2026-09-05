@@ -13,6 +13,14 @@ terraform -chdir=template validate
 
 Confirm version/provider compatibility, registry and routed vLLM access, GitHub external auth, secret scope, and an approved disposable namespace. Reconcile Bibliophilarr toolchain before building.
 
+For CoderOps discovery and diagnostics, run:
+
+```bash
+./coderops/scripts/coderops-doctor
+cd coderops/mcp && npm run inventory -- --json
+cd coderops/mcp && npm run capabilities -- --json
+```
+
 ## Build, scan, and authorized test deployment
 
 ```bash
@@ -30,3 +38,5 @@ coder templates push -d template Bibliophilarr --name vX.Y
 ```
 
 The last command requires explicit authorization. Record the digest and pin it. Test development plus exact-SHA validator workspaces, stop/restart persistence, all IDEs, clean independent validation, deletion/recreation, and secret-free evidence. Capture cold/warm/clone/restore/readiness/model timings. A future orchestrator interface may accept `{repository,ref,mode}` and return `{workspace_id,candidate_sha,results,evidence_uri}`; lifecycle APIs are intentionally absent.
+
+When investigating drift or policy issues, prefer CoderOps inventory and capability output before changing the template or restarting workspaces.
