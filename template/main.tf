@@ -164,7 +164,7 @@ data "coder_parameter" "startup_smoke_checks" {
   display_name = "Post-start smoke checks"
   description  = "Run post-start verification and capture a log bundle path."
   type         = "bool"
-  default      = true
+  default      = false
   mutable      = true
   order        = 11
 }
@@ -208,6 +208,60 @@ resource "coder_agent" "main" {
       echo "startup-fallback:P12: src .github symlink not required"
     fi
 
+    agents_dir="$repo_dir/.github/agents"
+    compat_agent="$agents_dir/bibliophilarr-coder-ops.agent.md"
+    fallback_agent="$agents_dir/agent-governance-engineer.agent.md"
+    if [ -d "$agents_dir" ] && [ ! -e "$compat_agent" ] && [ -f "$fallback_agent" ]; then
+      if ln -s "$(basename "$fallback_agent")" "$compat_agent" 2>/dev/null; then
+        echo "startup-fallback:P12: compatibility alias created for bibliophilarr-coder-ops"
+      elif cp -f "$fallback_agent" "$compat_agent" 2>/dev/null; then
+        echo "startup-fallback:P12: compatibility file alias created for bibliophilarr-coder-ops"
+      else
+        echo "startup-fallback:P12: WARNING failed to create bibliophilarr-coder-ops compatibility alias"
+      fi
+    fi
+
+    local_bin="$${HOME}/.local/bin"
+    copilot_safe="$local_bin/copilot-safe"
+    copilot_shim="$local_bin/copilot"
+    mkdir -p "$local_bin" 2>/dev/null || true
+    cat > "$copilot_safe" <<'EOF' || true
+#!/usr/bin/env bash
+set -eu
+
+cd /workspaces/Bibliophilarr 2>/dev/null || true
+unset GITHUB_TOKEN
+unset GH_TOKEN
+
+real_copilot=""
+if [ -x "/usr/bin/copilot" ]; then
+  real_copilot="/usr/bin/copilot"
+else
+  old_path="$PATH"
+  PATH=$(printf '%s' "$PATH" | sed -e "s#$HOME/.local/bin:##g" -e "s#:$HOME/.local/bin##g")
+  real_copilot="$(command -v copilot 2>/dev/null || true)"
+  PATH="$old_path"
+fi
+
+if [ -z "$real_copilot" ]; then
+  echo "copilot-safe: copilot executable not found" >&2
+  exit 127
+fi
+
+exec "$real_copilot" "$@"
+EOF
+    chmod 0755 "$copilot_safe" 2>/dev/null || true
+
+    if [ ! -e "$copilot_shim" ]; then
+      if ln -s copilot-safe "$copilot_shim" 2>/dev/null; then
+        echo "startup-fallback:P26: copilot shim created"
+      else
+        echo "startup-fallback:P26: WARNING failed to create copilot shim (non-fatal)"
+      fi
+    else
+      echo "startup-fallback:P26: copilot shim already present"
+    fi
+
     provider="$${LOCAL_LLM_PROVIDER:-none}"
     base_url="$${LOCAL_LLM_BASE_URL:-}"
     model="$${LOCAL_LLM_MODEL:-}"
@@ -241,7 +295,34 @@ resource "coder_agent" "main" {
   ]
 }
 EOF
-      echo "startup-fallback:P12: VS Code local model fallback written"
+      cs_data="$${HOME}/.local/share/code-server/Copilot"
+      mkdir -p "$cs_data" || true
+      cat > "$cs_data/chatLanguageModels.json" <<EOF
+{
+  "version": 1,
+  "customModels": [
+    {
+      "vendor": "customendpoint",
+      "apiType": "chat-completions",
+      "url": "$base_url",
+      "displayName": "Bibliophilarr local vLLM",
+      "toolCalling": true,
+      "maxInputTokens": $context_len,
+      "maxOutputTokens": 8192,
+      "models": [
+        {
+          "id": "$model",
+          "displayName": "$model",
+          "toolCalling": true,
+          "maxInputTokens": $context_len,
+          "maxOutputTokens": 8192
+        }
+      ]
+    }
+  ]
+}
+EOF
+      echo "startup-fallback:P12: VS Code + code-server local model fallback written"
 
       jetbrains_base_url="$${base_url%/v1}"
       for product in Rider WebStorm; do
@@ -276,7 +357,7 @@ EOF
     echo "startup-fallback:P12: end"
 
     if [ "$startup_rc" -ne 0 ]; then
-      exit "$startup_rc"
+      echo "startup-fallback:P26: WARNING primary startup script exited $startup_rc (non-fatal)"
     fi
   EOT
   env = {

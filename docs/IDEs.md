@@ -159,4 +159,9 @@ task, and the app repo is clean afterwards (0 dirt).
 - JetBrains workspace target remains the repository root `/workspaces/Bibliophilarr` via template `module "jetbrains" { folder = local.project_dir }`.
 - If JetBrains reopens a previous `/workspaces/Bibliophilarr/src` project, startup now adds `src/.github -> ../.github` so Copilot metadata is visible from either root.
 - VS Code local-model defaults are now preseeded on first workspace boot as well: `chatLanguageModels.json` is written and Machine `settings.json` is created when absent.
+- The BYOK model file is now synced for both VS Code Server and code-server startup paths (`~/.vscode-server/data/Copilot/chatLanguageModels.json` and `~/.local/share/code-server/Copilot/chatLanguageModels.json`).
+- Startup now creates a token-safe launcher at `~/.local/bin/copilot-safe` and a default `~/.local/bin/copilot` shim (when missing) that unsets GitHub token env vars before invoking Copilot CLI.
+- This copilot-safe/shim creation now lives in the template startup fallback path, so it remains available even if the image startup script origin/version changes.
+- Startup now creates `bibliophilarr-coder-ops.agent.md` as a compatibility alias from `agent-governance-engineer.agent.md` only when the compatibility file is missing.
 - JetBrains AI Assistant provider preseed normalizes `vllm_base_url` for JetBrains (trailing `/v1` removed) while VS Code/Copilot CLI retain the original OpenAI-compatible URL.
+- `startup_smoke_checks` now defaults to `false` to reduce false unhealthy reports from optional post-start smoke probes in default deployments.
