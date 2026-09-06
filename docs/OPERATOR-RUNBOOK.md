@@ -40,3 +40,31 @@ coder templates push -d template Bibliophilarr --name vX.Y
 The last command requires explicit authorization. Record the digest and pin it. Test development plus exact-SHA validator workspaces, stop/restart persistence, all IDEs, clean independent validation, deletion/recreation, and secret-free evidence. Capture cold/warm/clone/restore/readiness/model timings. A future orchestrator interface may accept `{repository,ref,mode}` and return `{workspace_id,candidate_sha,results,evidence_uri}`; lifecycle APIs are intentionally absent.
 
 When investigating drift or policy issues, prefer CoderOps inventory and capability output before changing the template or restarting workspaces.
+
+## Startup-health remediation validation flow (v2.8)
+
+Use this flow when validating candidate startup-health fixes so false positives are not misclassified as hard failures:
+
+```bash
+# 1) Validate source before push
+./scripts/validate-template.sh
+
+# 2) Push candidate version (inactive)
+./scripts/publish-coder-template.sh push --name v2.8
+
+# 3) Create clean disposable workspace from candidate with bounded startup checks
+./scripts/publish-coder-template.sh create-ws \
+	--version v2.8 \
+	--ws validation-v2-8 \
+	--startup-smoke-checks true
+
+# 4) Inspect startup and smoke logs via the workspace logs app or directly
+coder ssh <user>/validation-v2-8 -- "tail -n 200 ~/.local/state/bibliophilarr/startup.log"
+coder ssh <user>/validation-v2-8 -- "tail -n 200 ~/.local/state/bibliophilarr/smoke-checks.log"
+```
+
+Validation expectations for the remediation:
+- startup finishes with explicit success/failure markers (`workspace startup: SUCCESS` or `FAILED`)
+- checkout/startup/smoke operations are timeout-bounded and non-interactive
+- smoke checks do not block login and still emit traceable evidence artifacts
+- v2.8 clean-workspace validation shows no startup-health false-positive
