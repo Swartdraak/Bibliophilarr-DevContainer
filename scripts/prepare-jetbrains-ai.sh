@@ -43,6 +43,7 @@ if [[ -z ${base_url} || -z ${model} ]]; then
   echo "prepare-jetbrains-ai: provider=vllm but base_url/model unset; skipping"
   exit 0
 fi
+jetbrains_base_url=${base_url%/v1}
 
 home=${CODER_HOME:-/home/coder}
 repo_dir=${BIBLIOPHILARR_REPOSITORY_DIR:-/workspaces/Bibliophilarr}
@@ -66,7 +67,7 @@ for product in Rider WebStorm; do
 <application>
   <component name="LlmOpenAiCompatibleProviderSettings">
     <option name="name" value="${provider_id}" />
-    <option name="baseUrl" value="${base_url}" />
+    <option name="baseUrl" value="${jetbrains_base_url}" />
     <option name="apiKey" value="${api_key}" />
     <option name="model" value="${model}" />
     <option name="enabled" value="true" />

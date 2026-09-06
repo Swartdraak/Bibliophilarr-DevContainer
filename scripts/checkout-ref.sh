@@ -1,6 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 repo=${1:?repository path required}; requested=${2:?git ref required}; mode=${3:-development}
+git_timeout=${WORKSPACE_GIT_TIMEOUT_SEC:-180}
+
+run_with_timeout() {
+  local secs=$1
+  shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout --signal=TERM --kill-after=15 "$secs" "$@"
+  else
+    "$@"
+  fi
+}
+
+export GIT_TERMINAL_PROMPT=0
 cd "$repo"
 # Distinguish a FRESH/unpopulated clone from a populated dirty worktree.
 # `git clone --no-checkout` leaves HEAD on the default branch with NO checked-out
@@ -40,9 +53,9 @@ else
   fi
   # Populated + clean: normal path (re)checks out the requested ref below.
 fi
-git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
+run_with_timeout "$git_timeout" git fetch --prune origin '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'
 if [[ $requested =~ ^[0-9a-fA-F]{40}$ ]]; then
-  git cat-file -e "${requested}^{commit}" 2>/dev/null || git fetch origin "$requested"
+  git cat-file -e "${requested}^{commit}" 2>/dev/null || run_with_timeout "$git_timeout" git fetch origin "$requested"
   git cat-file -e "${requested}^{commit}" 2>/dev/null || { echo "requested SHA does not exist" >&2; exit 21; }
   git checkout --detach "$requested"
   [[ $(git rev-parse HEAD) == "${requested,,}" ]] || { echo "HEAD verification failed" >&2; exit 22; }

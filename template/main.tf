@@ -95,14 +95,16 @@ data "coder_parameter" "workspace_image" {
 data "coder_parameter" "vllm_base_url" {
   name         = "vllm_base_url"
   display_name = "vLLM base URL"
-  default      = ""
+  description  = "OpenAI-compatible endpoint, including /v1."
+  default      = "http://192.168.100.102:8000/v1"
   mutable      = true
   order        = 4
 }
 data "coder_parameter" "vllm_model" {
   name         = "vllm_model"
   display_name = "vLLM model"
-  default      = ""
+  description  = "Model id exposed by the vLLM /models endpoint."
+  default      = "qwen3.8-27b-fp8"
   mutable      = true
   order        = 5
 }
@@ -147,10 +149,29 @@ data "coder_parameter" "media_mount_mode" {
   }
 }
 
+data "coder_parameter" "startup_debug" {
+  name         = "startup_debug"
+  display_name = "Verbose startup logging"
+  description  = "Run startup with shell tracing and richer diagnostics."
+  type         = "bool"
+  default      = false
+  mutable      = true
+  order        = 10
+}
+
+data "coder_parameter" "startup_smoke_checks" {
+  name         = "startup_smoke_checks"
+  display_name = "Post-start smoke checks"
+  description  = "Run post-start verification and capture a log bundle path."
+  type         = "bool"
+  default      = true
+  mutable      = true
+  order        = 11
+}
+
 resource "coder_agent" "main" {
   arch                    = "amd64"
   os                      = "linux"
-  dir                     = local.project_dir
   startup_script_behavior = "blocking"
   startup_script          = <<-EOT
     set -eu
@@ -164,7 +185,99 @@ resource "coder_agent" "main" {
     # re-run; it self-heals on the next coder-owned run. Never blocks startup.
     mkdir -p /home/coder/.nuget/packages 2>/dev/null || true
     chown -R "$(id -u):$(id -g)" /home/coder/.nuget 2>/dev/null || true
-    /opt/workspace/bin/workspace-startup.sh
+    startup_rc=0
+    if [ "$${WORKSPACE_STARTUP_DEBUG:-false}" = "true" ]; then
+      export WORKSPACE_STARTUP_LOG="$${HOME}/.local/state/bibliophilarr/startup.log"
+      mkdir -p "$(dirname "$${WORKSPACE_STARTUP_LOG}")"
+      echo "startup debug: enabled"
+      bash -x /opt/workspace/bin/workspace-startup.sh || startup_rc=$?
+    else
+      /opt/workspace/bin/workspace-startup.sh || startup_rc=$?
+    fi
+
+    echo "startup-fallback:P12: begin"
+
+    repo_dir="$${BIBLIOPHILARR_REPOSITORY_DIR:-/workspaces/Bibliophilarr}"
+    if [ -d "$repo_dir/src" ] && [ -d "$repo_dir/.github" ] && [ ! -e "$repo_dir/src/.github" ]; then
+      if ln -s ../.github "$repo_dir/src/.github" 2>/dev/null; then
+        echo "startup-fallback:P12: src .github symlink created"
+      else
+        echo "startup-fallback:P12: WARNING failed to create src .github symlink (non-fatal)"
+      fi
+    else
+      echo "startup-fallback:P12: src .github symlink not required"
+    fi
+
+    provider="$${LOCAL_LLM_PROVIDER:-none}"
+    base_url="$${LOCAL_LLM_BASE_URL:-}"
+    model="$${LOCAL_LLM_MODEL:-}"
+    context_len="$${LOCAL_LLM_CONTEXT_LENGTH:-32768}"
+
+    if [ "$provider" = "vllm" ] && [ -n "$base_url" ] && [ -n "$model" ]; then
+      vsc_data="$${HOME}/.vscode-server/data/Copilot"
+      mkdir -p "$vsc_data" || true
+      cat > "$vsc_data/chatLanguageModels.json" <<EOF
+{
+  "version": 1,
+  "customModels": [
+    {
+      "vendor": "customendpoint",
+      "apiType": "chat-completions",
+      "url": "$base_url",
+      "displayName": "Bibliophilarr local vLLM",
+      "toolCalling": true,
+      "maxInputTokens": $context_len,
+      "maxOutputTokens": 8192,
+      "models": [
+        {
+          "id": "$model",
+          "displayName": "$model",
+          "toolCalling": true,
+          "maxInputTokens": $context_len,
+          "maxOutputTokens": 8192
+        }
+      ]
+    }
+  ]
+}
+EOF
+      echo "startup-fallback:P12: VS Code local model fallback written"
+
+      jetbrains_base_url="$${base_url%/v1}"
+      for product in Rider WebStorm; do
+        cfg="$${HOME}/.config/JetBrains/$product"
+        opts="$cfg/options"
+        ai_dir="$cfg/ai.assistant"
+        mkdir -p "$opts" "$ai_dir" || true
+        cat > "$opts/aiAssistantOpenAiCompatibleProvider.xml" <<EOF
+<application>
+  <component name="LlmOpenAiCompatibleProviderSettings">
+    <option name="name" value="bibliophilarr-local-vllm" />
+    <option name="baseUrl" value="$jetbrains_base_url" />
+    <option name="apiKey" value="" />
+    <option name="model" value="$model" />
+    <option name="enabled" value="true" />
+  </component>
+</application>
+EOF
+        cat > "$opts/aiAssistantProviderSelection.xml" <<EOF
+<application>
+  <component name="LlmProviderSelection">
+    <option name="chatProviderId" value="bibliophilarr-local-vllm" />
+  </component>
+</application>
+EOF
+      done
+      echo "startup-fallback:P12: JetBrains local model fallback scaffold written"
+    else
+      echo "startup-fallback:P12: local model fallback skipped (provider/base/model not set for vllm)"
+    fi
+
+    echo "startup-fallback:P12: end"
+
+    if [ "$startup_rc" -ne 0 ]; then
+      exit "$startup_rc"
+    fi
   EOT
   env = {
     BIBLIOPHILARR_REPOSITORY_URL = var.repository_url
@@ -201,14 +314,16 @@ resource "coder_agent" "main" {
     # WS=WebStorm -> env uses the human product name Rider/WebStorm). Persisted
     # as long as the home volume persists (stop/start); a delete/recreate
     # re-seeds via the startup preparation step (apply-jetbrains-backend.sh).
-    Rider_config_path     = "${local.coder_home}/.config/JetBrains/Rider"
-    Rider_plugins_path    = "${local.coder_home}/.local/share/JetBrains/Rider"
-    Rider_system_path     = "${local.coder_home}/.cache/JetBrains/Rider"
-    Rider_log_path        = "${local.coder_home}/.cache/JetBrains/Rider/log"
-    WebStorm_config_path  = "${local.coder_home}/.config/JetBrains/WebStorm"
-    WebStorm_plugins_path = "${local.coder_home}/.local/share/JetBrains/WebStorm"
-    WebStorm_system_path  = "${local.coder_home}/.cache/JetBrains/WebStorm"
-    WebStorm_log_path     = "${local.coder_home}/.cache/JetBrains/WebStorm/log"
+    Rider_config_path       = "${local.coder_home}/.config/JetBrains/Rider"
+    Rider_plugins_path      = "${local.coder_home}/.local/share/JetBrains/Rider"
+    Rider_system_path       = "${local.coder_home}/.cache/JetBrains/Rider"
+    Rider_log_path          = "${local.coder_home}/.cache/JetBrains/Rider/log"
+    WebStorm_config_path    = "${local.coder_home}/.config/JetBrains/WebStorm"
+    WebStorm_plugins_path   = "${local.coder_home}/.local/share/JetBrains/WebStorm"
+    WebStorm_system_path    = "${local.coder_home}/.cache/JetBrains/WebStorm"
+    WebStorm_log_path       = "${local.coder_home}/.cache/JetBrains/WebStorm/log"
+    WORKSPACE_STARTUP_DEBUG = tostring(data.coder_parameter.startup_debug.value)
+    WORKSPACE_SMOKE_CHECKS  = tostring(data.coder_parameter.startup_smoke_checks.value)
     # NOTE: GITHUB_TOKEN is NOT set here. It is auto-injected by Coder from the
     # operator's Coder Secret "Swartdraak GH PAT" (--env GITHUB_TOKEN) at
     # workspace start. The startup script uses $GITHUB_TOKEN to configure `gh`
@@ -478,4 +593,86 @@ module "jetbrains" {
     RD = { build = "262.9437.287", name = "Rider", icon = "/icon/rider.svg" }
     WS = { build = "262.10315.144", name = "WebStorm", icon = "/icon/webstorm.svg" }
   }
+}
+
+resource "coder_script" "workspace_smoke_checks" {
+  count              = data.coder_workspace.me.start_count * (data.coder_parameter.startup_smoke_checks.value ? 1 : 0)
+  agent_id           = coder_agent.main.id
+  display_name       = "Workspace smoke checks"
+  icon               = "/icon/terminal.svg"
+  run_on_start       = true
+  start_blocks_login = false
+  timeout            = 300
+  log_path           = "${local.coder_home}/.local/state/bibliophilarr/smoke-checks.log"
+  script             = <<-EOT
+    set -u
+
+    out_dir="${local.coder_home}/.local/state/bibliophilarr"
+
+    # Deterministic artifact setup: ensure output directory exists.
+    mkdir -p "$out_dir"
+
+    run_with_timeout() {
+      secs="$1"
+      shift
+      if command -v timeout >/dev/null 2>&1; then
+        timeout --signal=TERM --kill-after=15 "$secs" "$@"
+      else
+        "$@" &
+        cmd_pid=$!
+        (
+          sleep "$secs"
+          kill -TERM "$cmd_pid" 2>/dev/null || true
+          sleep 5
+          kill -KILL "$cmd_pid" 2>/dev/null || true
+        ) &
+        guard_pid=$!
+        wait "$cmd_pid"
+        cmd_rc=$?
+        kill "$guard_pid" 2>/dev/null || true
+        wait "$guard_pid" 2>/dev/null || true
+        return "$cmd_rc"
+      fi
+    }
+
+    echo "SMOKE_BEGIN $(date -Iseconds)"
+    run_with_timeout 90 /opt/workspace/bin/verify-workspace.sh "${local.project_dir}" || true
+    run_with_timeout 180 /opt/workspace/bin/two-workspace-evidence.sh || true
+    echo "SMOKE_END $(date -Iseconds)"
+
+    bundle="$out_dir/log-bundle-$(date +%Y%m%d-%H%M%S).tar.gz"
+    list_file="$out_dir/log-bundle-files.txt"
+    : > "$list_file"
+
+    for rel in \
+      .local/state/bibliophilarr \
+      .local/share/code-server/coder-logs \
+      .local/share/JetBrains/Toolbox/logs \
+      .cache/JetBrains
+    do
+      if [ -e "${local.coder_home}/$rel" ]; then
+        printf '%s\n' "$rel" >> "$list_file"
+      else
+        echo "log bundle: skip missing $rel"
+      fi
+    done
+
+    if [ -s "$list_file" ]; then
+      run_with_timeout 60 tar -czf "$bundle" -C "${local.coder_home}" -T "$list_file" || true
+    else
+      run_with_timeout 60 tar -czf "$bundle" -C "${local.coder_home}" --files-from /dev/null || true
+    fi
+    rm -f "$list_file"
+    echo "log bundle: $bundle"
+    exit 0
+  EOT
+}
+
+resource "coder_app" "workspace_logs" {
+  agent_id     = coder_agent.main.id
+  slug         = "workspace-logs"
+  display_name = "Workspace Logs"
+  icon         = "/icon/file.svg"
+  share        = "owner"
+  command      = "bash -lc 'ls -lah ${local.coder_home}/.local/state/bibliophilarr; echo; tail -n 120 ${local.coder_home}/.local/state/bibliophilarr/startup.log 2>/dev/null || true; echo; tail -n 120 ${local.coder_home}/.local/state/bibliophilarr/smoke-checks.log 2>/dev/null || true'"
 }

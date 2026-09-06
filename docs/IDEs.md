@@ -153,3 +153,10 @@ Mitigations built into `assign-task` (0.2.9):
 
 Verified on 0.2.8/0.2.9: `assign-task` reaches the local model, executes a bounded
 task, and the app repo is clean afterwards (0 dirt).
+
+## Operator note (P9 expected behavior)
+
+- JetBrains workspace target remains the repository root `/workspaces/Bibliophilarr` via template `module "jetbrains" { folder = local.project_dir }`.
+- If JetBrains reopens a previous `/workspaces/Bibliophilarr/src` project, startup now adds `src/.github -> ../.github` so Copilot metadata is visible from either root.
+- VS Code local-model defaults are now preseeded on first workspace boot as well: `chatLanguageModels.json` is written and Machine `settings.json` is created when absent.
+- JetBrains AI Assistant provider preseed normalizes `vllm_base_url` for JetBrains (trailing `/v1` removed) while VS Code/Copilot CLI retain the original OpenAI-compatible URL.

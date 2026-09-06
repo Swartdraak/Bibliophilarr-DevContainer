@@ -76,17 +76,21 @@ echo "apply-ide-byok: VS Code customendpoint written to ${vsc_data}/chatLanguage
 # the same id form. (chat.defaultModel / chat.utilityModel are the documented
 # selection keys.)
 vsc_settings="$HOME/.vscode-server/data/Machine/settings.json"
-if [[ -f ${vsc_settings} ]]; then
-  # merge is non-trivial in pure bash; only write if jq is present and it parses
-  if command -v jq >/dev/null 2>&1 && jq empty "$vsc_settings" >/dev/null 2>&1; then
-    tmp=$(mktemp)
-    if jq --arg m "${endpoint_id}|${model}" \
-       '.chat.utilityModel=$m | .chat.utilitySmallModel=$m | .chat.utilityModelDefault=$m' \
-       "$vsc_settings" > "$tmp"; then
-      mv "$tmp" "$vsc_settings"
-    else
-      rm -f "$tmp"
-    fi
+mkdir -p "$(dirname "$vsc_settings")"
+if [[ ! -f ${vsc_settings} ]]; then
+  printf '{}\n' > "$vsc_settings"
+fi
+# merge is non-trivial in pure bash; only write if jq is present and source JSON parses
+if command -v jq >/dev/null 2>&1 && jq empty "$vsc_settings" >/dev/null 2>&1; then
+  tmp=$(mktemp)
+  if jq --arg m "${endpoint_id}|${model}" \
+     '.chat.utilityModel=$m | .chat.utilitySmallModel=$m | .chat.utilityModelDefault=$m' \
+     "$vsc_settings" > "$tmp"; then
+    mv "$tmp" "$vsc_settings"
+  else
+    rm -f "$tmp"
   fi
+else
+  echo "apply-ide-byok: WARNING: could not update ${vsc_settings} (missing jq or invalid JSON)"
 fi
 echo "apply-ide-byok: DONE"
