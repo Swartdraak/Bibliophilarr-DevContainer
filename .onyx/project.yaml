@@ -19,6 +19,20 @@
 # (typescript 7.0.2 tsgo, @types/node 26.6.2, yaml 2.9.1). No command was
 # added, removed or re-scoped.
 #
+# Re-validated by existing-PR intake audit stage (task t_30aa8dbb) on
+# 2026-09-24 for PR #19 (dependabot: zod 3.25.76 -> 4.6.5, RUNTIME,
+# MAJOR major-version jump, /coderops/mcp): picked-up head 7f796ea6
+# (fresh 2026-09-24T21:25:20Z Dependabot rebase onto post-#20 main
+# @ 41481c9e); guard merge of origin/main confirmed NO-OP ("Already up
+# to date" — main is a direct ancestor, 1 commit ahead). All
+# bootstrap/build/lint/unit/integration/security commands re-executed
+# and verified at the picked-up head: npm ci 99 packages 0
+# vulnerabilities, tsc strict (TS 7.0.2 tsgo) zero diagnostics, 5/5
+# node --test pass, MCP stdio initialize OK, 31/31 bash -n, git diff
+# --check clean, secret scan 0 hits, test-checkout PASS, test-media
+# PASS; zod 4.6.5 confirmed on disk and API-probed. No command was
+# added, removed or re-scoped.
+#
 # Repo purpose: standalone, source-controlled Coder template + canonical
 # workspace-image project for Swartdraak/Bibliophilarr, plus the CoderOps
 # control layer (discovery, drift, policy, audit logging, MCP server).
@@ -34,21 +48,27 @@ repo:
   visibility: public
   language: TypeScript (coderops/mcp), Bash (scripts, image, workspace), HCL (template)
 
-base_sha: e0ca4b16ec2e4675549c1c1ee1af732bae3f7fac
+base_sha: 41481c9e3ffff255d5aa6d6400392f21b5ed9608
 audit_date: "2026-09-24"
 revalidation:
-  task: t_6197695d
-  mode: existing-pr-intake (PR #20, @types/node ^20.19.11 -> ^26.6.2 dev-only)
+  task: t_30aa8dbb
+  mode: existing-pr-intake (PR #19, zod ^3.25.76 -> ^4.6.5 RUNTIME MAJOR)
   revalidated_at: "2026-09-24"
   notes: >
-    All bootstrap/build/lint/unit/integration/security commands re-executed
-    and verified in the Onyx Docker audit container (node v20.20.2,
-    npm 10.8.2) at the picked-up work-branch head 4631a029 (single Dependabot
-    commit ahead of main @ 9717bd8b; guard merge of origin/main confirmed
-    NO-OP — "Already up to date"). 5/5 node --test pass, tsc strict (TS 7.0.2
-    tsgo) zero diagnostics, MCP stdio initialize OK, test-checkout PASS,
-    test-media PASS, secret scan clean. See ../../baseline.json for
-    per-command evidence.
+    All bootstrap/build/lint/unit/integration/security commands
+    re-executed and verified in the Onyx Docker audit container (node
+    v20.20.2, npm 10.8.2) at the picked-up work-branch head 7f796ea6
+    (single Dependabot commit ahead of main @ 41481c9e — fresh
+    2026-09-24T21:25:20Z rebase; guard merge of origin/main confirmed
+    NO-OP "Already up to date"). zod 4.6.5 is a RUNTIME MAJOR jump:
+    the compatibility gate = tsc strict (TS 7.0.2 tsgo) zero
+    diagnostics + 5/5 node --test + MCP stdio initialize at the
+    picked-up head — all green, plus an explicit zod 4 API surface
+    probe (z.object/z.string().email() parse/safeParse semantics).
+    The picked-up head retains all three published bumps (yaml 2.9.1,
+    typescript 7.0.2, @types/node 26.6.2) plus zod 4.6.5 (116 total
+    packages, 0 vulnerabilities). No command was added,
+    removed or re-scoped.
 environment:
   node: "v20.20.2 (matches toolchain.json nodeMajor=20 and CI runner ubuntu-24.04)"
   npm: "10.8.2"
@@ -92,7 +112,7 @@ bootstrap:
   - id: coderops-deps
     command: cd coderops/mcp && npm ci
     verified: true
-    notes: Lockfile-driven install, 96 top-level packages, exit 0 (re-verified 2026-09-24 at PR #20 picked-up head: typescript 7.0.2 + 8 tsgo platform binaries, @types/node 26.6.2 + undici-types 8.9.0, yaml 2.9.1).
+    notes: Lockfile-driven install, 116 total packages in the tree (npm ci reports 99 added), exit 0, 0 vulnerabilities (re-verified 2026-09-24 at PR #19 picked-up head 7f796ea6: typescript 7.0.2 + 8 tsgo platform binaries, @types/node 26.6.2 + undici-types 8.9.0, yaml 2.9.1, zod 4.6.5).
 
 build:
   - id: coderops-build
