@@ -4,10 +4,20 @@
 # container at base SHA e0ca4b16ec2e4675549c1c1ee1af732bae3f7fac (main).
 # Verification evidence: ../../baseline.json + ../../logs/audit_raw.log.
 #
-# Updated by existing-PR intake audit stage (task t_5b9e5abd) on 2026-09-24
-# for PR #17 (dependabot: typescript 5.9.3 -> 7.0.2, dev-only, /coderops/mcp):
-# commands re-verified at the picked-up (post-merge) head; environment and
-# package counts updated; TS 7.0.2 native (tsgo) build confirmed.
+# Re-validated by existing-PR intake audit stage (task t_5b9e5abd) on
+# 2026-09-24 for PR #17 (dependabot: typescript 5.9.3 -> 7.0.2, dev-only,
+# /coderops/mcp): commands re-verified at the picked-up (post-merge) head;
+# environment and package counts updated; TS 7.0.2 native (tsgo) build
+# confirmed.
+#
+# Re-validated by existing-PR intake audit stage (task t_6197695d) on
+# 2026-09-24 for PR #20 (dependabot: @types/node 20.19.43 -> 26.6.2,
+# dev-only, /coderops/mcp): guard merge of origin/main (9717bd8b) confirmed
+# NO-OP (main is an ancestor of the PR head — Dependabot re-based #20 onto
+# the post-#17 main); all bootstrap/build/lint/unit/integration/security
+# commands re-executed and verified at the picked-up head 4631a029
+# (typescript 7.0.2 tsgo, @types/node 26.6.2, yaml 2.9.1). No command was
+# added, removed or re-scoped.
 #
 # Repo purpose: standalone, source-controlled Coder template + canonical
 # workspace-image project for Swartdraak/Bibliophilarr, plus the CoderOps
@@ -27,15 +37,18 @@ repo:
 base_sha: e0ca4b16ec2e4675549c1c1ee1af732bae3f7fac
 audit_date: "2026-09-24"
 revalidation:
-  task: t_5b9e5abd
-  mode: existing-pr-intake (PR #17, typescript ^5.9.3 -> ^7.0.2 dev-only)
+  task: t_6197695d
+  mode: existing-pr-intake (PR #20, @types/node ^20.19.11 -> ^26.6.2 dev-only)
   revalidated_at: "2026-09-24"
   notes: >
     All bootstrap/build/lint/unit/integration/security commands re-executed
     and verified in the Onyx Docker audit container (node v20.20.2,
-    npm 10.8.2) at the picked-up post-merge work-branch head after the
-    normal merge of origin/main (f0901b3e, the #16 yaml 2.9.1 merge) into
-    the PR branch. See ../../baseline.json for per-command evidence.
+    npm 10.8.2) at the picked-up work-branch head 4631a029 (single Dependabot
+    commit ahead of main @ 9717bd8b; guard merge of origin/main confirmed
+    NO-OP — "Already up to date"). 5/5 node --test pass, tsc strict (TS 7.0.2
+    tsgo) zero diagnostics, MCP stdio initialize OK, test-checkout PASS,
+    test-media PASS, secret scan clean. See ../../baseline.json for
+    per-command evidence.
 environment:
   node: "v20.20.2 (matches toolchain.json nodeMajor=20 and CI runner ubuntu-24.04)"
   npm: "10.8.2"
@@ -79,7 +92,7 @@ bootstrap:
   - id: coderops-deps
     command: cd coderops/mcp && npm ci
     verified: true
-    notes: Lockfile-driven install, 99 packages, exit 0 (re-verified 2026-09-24 at PR #17 picked-up head with typescript 7.0.2 + 8 optional tsgo platform binaries).
+    notes: Lockfile-driven install, 96 top-level packages, exit 0 (re-verified 2026-09-24 at PR #20 picked-up head: typescript 7.0.2 + 8 tsgo platform binaries, @types/node 26.6.2 + undici-types 8.9.0, yaml 2.9.1).
 
 build:
   - id: coderops-build
@@ -205,3 +218,11 @@ pre_existing_faults:
     generator copies but never deletes, .github/ cannot be regenerated
     byte-identical. Recorded as a governance observation for the owner,
     not fixed by onboarding (behavior change is out of scope).
+  - >
+    Advisory (owner decision, NOT a gate, recorded at PR #20 audit
+    t_6197695d): @types/node 26.6.2 typings span node major lines while
+    toolchain.json nodeMajor=20 and CI runners use node 20.x. Empirical
+    result at the picked-up head: tsc strict (TS 7.0.2) zero diagnostics,
+    5/5 tests pass, MCP handshake OK — no 26.x-vs-20.x typing
+    inconsistency surfaced. Pin latest @types/node 20.x only if 26.x
+    typings later prove inconsistent with the 20.x runtime.
