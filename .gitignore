@@ -27,3 +27,4 @@ coderops/mcp/node_modules/
 coderops/mcp/dist/
 coderops/.state/
 coderops/.cache/
+.local/
