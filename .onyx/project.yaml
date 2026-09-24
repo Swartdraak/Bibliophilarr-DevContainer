@@ -4,6 +4,11 @@
 # container at base SHA e0ca4b16ec2e4675549c1c1ee1af732bae3f7fac (main).
 # Verification evidence: ../../baseline.json + ../../logs/audit_raw.log.
 #
+# Updated by existing-PR intake audit stage (task t_5b9e5abd) on 2026-09-24
+# for PR #17 (dependabot: typescript 5.9.3 -> 7.0.2, dev-only, /coderops/mcp):
+# commands re-verified at the picked-up (post-merge) head; environment and
+# package counts updated; TS 7.0.2 native (tsgo) build confirmed.
+#
 # Repo purpose: standalone, source-controlled Coder template + canonical
 # workspace-image project for Swartdraak/Bibliophilarr, plus the CoderOps
 # control layer (discovery, drift, policy, audit logging, MCP server).
@@ -20,10 +25,21 @@ repo:
   language: TypeScript (coderops/mcp), Bash (scripts, image, workspace), HCL (template)
 
 base_sha: e0ca4b16ec2e4675549c1c1ee1af732bae3f7fac
-audit_date: "2026-09-17"
+audit_date: "2026-09-24"
+revalidation:
+  task: t_5b9e5abd
+  mode: existing-pr-intake (PR #17, typescript ^5.9.3 -> ^7.0.2 dev-only)
+  revalidated_at: "2026-09-24"
+  notes: >
+    All bootstrap/build/lint/unit/integration/security commands re-executed
+    and verified in the Onyx Docker audit container (node v20.20.2,
+    npm 10.8.2) at the picked-up post-merge work-branch head after the
+    normal merge of origin/main (f0901b3e, the #16 yaml 2.9.1 merge) into
+    the PR branch. See ../../baseline.json for per-command evidence.
 environment:
   node: "v20.20.2 (matches toolchain.json nodeMajor=20 and CI runner ubuntu-24.04)"
   npm: "10.8.2"
+  typescript: "7.0.2 (Go-based tsgo native compiler; dev-only, /coderops/mcp)"
   python: "3.11.15"
   terraform: "not installed in audit container (required version 1.9.8 per CI)"
   shellcheck: "not installed in audit container"
@@ -63,13 +79,13 @@ bootstrap:
   - id: coderops-deps
     command: cd coderops/mcp && npm ci
     verified: true
-    notes: Lockfile-driven install, 98 packages, exit 0.
+    notes: Lockfile-driven install, 99 packages, exit 0 (re-verified 2026-09-24 at PR #17 picked-up head with typescript 7.0.2 + 8 optional tsgo platform binaries).
 
 build:
   - id: coderops-build
     command: cd coderops/mcp && npm run build
     verified: true
-    notes: "tsc -p tsconfig.json, clean, exit 0."
+    notes: "tsc -p tsconfig.json (typescript 7.0.2 tsgo native binary), strict, zero diagnostics, exit 0."
 
 lint:
   - id: bash-syntax
