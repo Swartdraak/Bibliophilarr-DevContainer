@@ -33,6 +33,20 @@
 # PASS; zod 4.6.5 confirmed on disk and API-probed. No command was
 # added, removed or re-scoped.
 #
+# Re-validated by development audit stage (task t_b9abfa8e) on 2026-10-01
+# for issue #23 (security: 2 moderate lockfile advisories in /coderops/mcp,
+# transitive via @modelcontextprotocol/sdk 1.30.0): work branch
+# fix/issue-23-lockfile-advisories created from main @ 042f1c68
+# (042f1c683c8302edb798e7ca329b8109d2fcbb92). npm overrides pin
+# fast-uri ^3.1.8 + ip-address ^10.7.1; lockfile regenerated (lock-only)
+# to fast-uri 3.1.8 + ip-address 10.7.2; new regression test
+# test/lockfile-pins.test.ts (2 tests). All commands re-executed and
+# verified at the committed head 19374c56 (19374c561518562ff1e025d2184afff868070e74):
+# npm ci clean, npm audit 0 vulnerabilities, tsc strict (TS 7.0.2 tsgo)
+# zero diagnostics, 7/7 node --test, MCP stdio initialize OK, diff limited
+# to coderops/mcp (package.json, package-lock.json, test/lockfile-pins.test.ts).
+# No command was added, removed or re-scoped; the unit count is 5 -> 7.
+#
 # Repo purpose: standalone, source-controlled Coder template + canonical
 # workspace-image project for Swartdraak/Bibliophilarr, plus the CoderOps
 # control layer (discovery, drift, policy, audit logging, MCP server).
@@ -48,27 +62,34 @@ repo:
   visibility: public
   language: TypeScript (coderops/mcp), Bash (scripts, image, workspace), HCL (template)
 
-base_sha: 41481c9e3ffff255d5aa6d6400392f21b5ed9608
-audit_date: "2026-09-24"
+base_sha: 042f1c683c8302edb798e7ca329b8109d2fcbb92
+audit_date: "2026-10-01"
 revalidation:
-  task: t_30aa8dbb
-  mode: existing-pr-intake (PR #19, zod ^3.25.76 -> ^4.6.5 RUNTIME MAJOR)
-  revalidated_at: "2026-09-24"
+  task: t_b9abfa8e
+  mode: development-run (issue #23, security lockfile repair in /coderops/mcp)
+  revalidated_at: "2026-10-01"
   notes: >
-    All bootstrap/build/lint/unit/integration/security commands
+    Work branch fix/issue-23-lockfile-advisories created from main @
+    042f1c68 (042f1c683c8302edb798e7ca329b8109d2fcbb92). Issue #23:
+    npm audit at the committed coderops/mcp lockfile reported 2 moderate
+    advisories, both transitive via @modelcontextprotocol/sdk 1.30.0
+    (fast-uri 3.1.7 GHSA-hrr3-gc8f-f4qj CWE-178; ip-address 10.7.0
+    GHSA-j6r3-76f7-8jcv CWE-697/843 + GHSA-h3mg-xc3c-68pw CWE-400/770).
+    An SDK version bump alone cannot repair this (1.30.0/1.30.1/1.31.0
+    all accept the vulnerable transitive ranges); the fix is a
+    lockfile-level repair: npm overrides pin fast-uri ^3.1.8 and
+    ip-address ^10.7.1, lockfile regenerated (lock-only) to fast-uri
+    3.1.8 + ip-address 10.7.2, plus a new regression test
+    test/lockfile-pins.test.ts (2 tests: overrides present + resolved
+    lockfile entries satisfy the pinned ranges). All commands
     re-executed and verified in the Onyx Docker audit container (node
-    v20.20.2, npm 10.8.2) at the picked-up work-branch head 7f796ea6
-    (single Dependabot commit ahead of main @ 41481c9e — fresh
-    2026-09-24T21:25:20Z rebase; guard merge of origin/main confirmed
-    NO-OP "Already up to date"). zod 4.6.5 is a RUNTIME MAJOR jump:
-    the compatibility gate = tsc strict (TS 7.0.2 tsgo) zero
-    diagnostics + 5/5 node --test + MCP stdio initialize at the
-    picked-up head — all green, plus an explicit zod 4 API surface
-    probe (z.object/z.string().email() parse/safeParse semantics).
-    The picked-up head retains all three published bumps (yaml 2.9.1,
-    typescript 7.0.2, @types/node 26.6.2) plus zod 4.6.5 (116 total
-    packages, 0 vulnerabilities). No command was added,
-    removed or re-scoped.
+    v20.20.2, npm 10.8.2) at the committed head 19374c56
+    (19374c561518562ff1e025d2184afff868070e74): npm ci clean, npm audit
+    0 vulnerabilities, tsc strict (TS 7.0.2 tsgo) zero diagnostics,
+    7/7 node --test, MCP stdio initialize OK (serverInfo coderops
+    0.1.0), 31/31 bash -n, secret scan clean, git diff --check clean,
+    JSON validation clean. No command was added, removed or re-scoped;
+    the unit count is 5 -> 7 (new lockfile-pin regression tests).
 environment:
   node: "v20.20.2 (matches toolchain.json nodeMajor=20 and CI runner ubuntu-24.04)"
   npm: "10.8.2"
@@ -142,7 +163,7 @@ unit:
   - id: coderops-test
     command: cd coderops/mcp && npm test
     verified: true
-    notes: node --test; 5/5 pass (redaction, policy observer/operator, mutation classification, change-plan shape).
+    notes: node --test; 7/7 pass (redaction, policy observer/operator, mutation classification, change-plan shape, lockfile overrides present, lockfile pinned versions resolved — the last two are the issue #23 regression guard added 2026-10-01 at head 19374c56).
   - id: checkout-test
     command: ./tests/test-checkout.sh
     verified: true
