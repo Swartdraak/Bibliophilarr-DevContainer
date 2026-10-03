@@ -62,6 +62,24 @@
 # confirmed on disk; F1 overrides block + lockfile-pins.test.ts
 # PRESERVED. No command was added, removed or re-scoped.
 #
+# Re-validated by development audit stage (task t_e4381f2a) on
+# 2026-10-03 for PR #25 (dependabot: @modelcontextprotocol/sdk 1.30.0 ->
+# 1.31.0, RUNTIME dependency, /coderops/mcp): work branch
+# dependabot/npm_and_yarn/coderops/mcp/modelcontextprotocol/sdk-1.31.0 at
+# the registered initial head e2f14d75 (e2f14d7564c2dac95c77eafd47d49f1c476ee954);
+# guard merge of origin/main (d467b81b) is a NO-OP (main IS an ancestor —
+# merge-base == main EXACTLY, head exactly 1 commit ahead, its parent IS
+# live main). All bootstrap/build/lint/unit/integration/security commands
+# re-executed and verified at the exact head e2f14d75 in a fresh detached
+# worktree (node v20.20.2, npm 10.8.2): npm ci 99 packages 0 vulnerabilities,
+# npm audit 0 vulnerabilities, tsc strict (TS 7.0.2 tsgo) zero diagnostics,
+# 7/7 node --test pass (including the issue #23 F1 lockfile-pin regression
+# guard), MCP stdio initialize OK (serverInfo coderops 0.1.0), resolved sdk
+# 1.31.0 confirmed on disk, F1 overrides on-disk fast-uri 3.1.8 /
+# ip-address 10.7.2, 31/31 bash -n, git diff --check clean, secret scan 0
+# hits, test-checkout PASS, test-media PASS. No command was added, removed
+# or re-scoped; base_sha updated to the current integration head d467b81b.
+#
 # Repo purpose: standalone, source-controlled Coder template + canonical
 # workspace-image project for Swartdraak/Bibliophilarr, plus the CoderOps
 # control layer (discovery, drift, policy, audit logging, MCP server).
@@ -77,39 +95,39 @@ repo:
   visibility: public
   language: TypeScript (coderops/mcp), Bash (scripts, image, workspace), HCL (template)
 
-base_sha: 7f2aabfd327a06d4c47e521be917392660a268bd
-audit_date: "2026-10-02"
+base_sha: d467b81bbff8ed458a09ff2dadb327b65957be0a
+audit_date: "2026-10-03"
 revalidation:
-  task: t_3a62bc63
-  mode: existing-pr-run (PR #22, dependabot @types/node 26.6.2 -> 26.6.3, validation/publication only)
-  revalidated_at: "2026-10-02"
+  task: t_e4381f2a
+  mode: development-run (registered existing PR #25, dependabot @modelcontextprotocol/sdk 1.30.0 -> 1.31.0, RUNTIME dependency, validation/publication only)
+  revalidated_at: "2026-10-03"
   notes: >
-    Existing-PR intake audit for registered PR #22
-    (dependabot/npm_and_yarn/coderops/mcp/types/node-26.6.3).
-    PR head 57e81a1dd907969d645128bd3a7fe7736f483cc6 is 1 commit
-    ahead of main @ 7f2aabfd (the #24 squash of issue #23's F1
-    lockfile-advisory repair). main IS an ancestor of the head
-    (merge-base == main EXACTLY) — cleanly rebased, guard merge is
-    a NO-OP. All commands re-executed and verified in the Onyx
-    Docker audit container (node v20.20.2, npm 10.8.2) at the exact
-    head 57e81a1 in a detached worktree: npm ci clean (0 vulns),
-    npm audit 0 vulnerabilities, tsc strict (TS 7.0.2 tsgo) zero
-    diagnostics, 7/7 node --test pass (including F1 lockfile-pin
-    regression guard: overrides present + resolved lockfile entries
-    satisfy pinned ranges), MCP stdio initialize OK (serverInfo
-    coderops 0.1.0), 31/31 bash -n, git diff --check clean,
-    secret scan 0 hits, test-checkout PASS, test-media PASS.
-    @types/node 26.6.3 confirmed on disk (npm ci from committed
-    lockfile). F1 repair PRESERVED: overrides block {fast-uri
-    ^3.1.8, ip-address ^10.7.1} present in package.json;
-    test/lockfile-pins.test.ts present (3149 bytes, 2 tests).
-    Diff vs main = exactly 2 files +5/-5 (package.json
-    @types/node line + package-lock.json matching entries).
-    No command was added, removed or re-scoped.
-    The F3 advisory (@types/node 26.x typings vs nodeMajor=20
-    runtime) remains non-blocking: tsc strict zero diagnostics,
-    7/7 tests pass, MCP handshake OK — no 26.x-vs-20.x typing
-    inconsistency surfaced at this head.
+    Development audit for registered PR #25
+    (dependabot/npm_and_yarn/coderops/mcp/modelcontextprotocol/sdk-1.31.0).
+    PR head e2f14d7564c2dac95c77eafd47d49f1c476ee954 is 1 commit
+    ahead of main @ d467b81b (the #22 squash of @types/node 26.6.3).
+    main IS an ancestor of the head (merge-base == main EXACTLY,
+    rev-list 0 1; head's parent IS live main) — no F-1 merge needed,
+    guard merge is a NO-OP. All commands re-executed and verified in
+    the Onyx Docker audit container (node v20.20.2, npm 10.8.2) at
+    the exact head e2f14d75 in a fresh detached worktree: npm ci 99
+    packages 0 vulnerabilities, npm audit 0 vulnerabilities, tsc
+    strict (TS 7.0.2 tsgo) zero diagnostics, 7/7 node --test pass
+    (including F1 lockfile-pin regression guard: overrides present +
+    resolved lockfile entries satisfy pinned ranges), MCP stdio
+    initialize OK (serverInfo coderops 0.1.0), resolved sdk 1.31.0
+    confirmed on disk, F1 overrides on-disk fast-uri 3.1.8 /
+    ip-address 10.7.2, 31/31 bash -n, git diff --check clean, secret
+    scan 0 hits, test-checkout PASS, test-media PASS. Diff vs main =
+    exactly 2 files +5/-5 (package.json @modelcontextprotocol/sdk
+    ^1.17.4 -> ^1.31.0 line + package-lock.json matching entries:
+    version/resolved/integrity). F1 repair PRESERVED: overrides block
+    {fast-uri ^3.1.8, ip-address ^10.7.1} present in package.json;
+    test/lockfile-pins.test.ts present (2 tests); the #25 diff does
+    not touch those entries. Exact-head CI 2/2 green (authoritative
+    publication-gate view, fresh 2026-10-03T11:45Z: Static validation
+    110939022098 + Workspace image 110939021840, both
+    completed/success). No command was added, removed or re-scoped.
 environment:
   node: "v20.20.2 (matches toolchain.json nodeMajor=20 and CI runner ubuntu-24.04)"
   npm: "10.8.2"
